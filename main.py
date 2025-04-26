@@ -1,366 +1,229 @@
-import argparse
-import base64
-import sys
-import re
+import os
+from enum import Enum
+from typing import Optional, Dict
 
-from Crypto.Cipher import AES
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
+from dotenv import load_dotenv
+
+
 import json
 import socket
 
+from encryptor import (
+    decrypt_GCM_generic,
+    decrypt_generic,
+    encrypt_GCM_generic,
+    encrypt_generic,
+    encrypt_GCM,
+    encrypt,
+    decrypt_GCM,
+    decrypt,
+)
 
-GENERIC_KEY = "a3K8Bx%2r8Y7#xDh"
-ENCRYPTION_TYPE = 'ECB'
-GENERIC_GCM_KEY = "{yxAHAY_Lm6pbC/<"
-GCM_IV = b'\x54\x40\x78\x44\x49\x67\x5a\x51\x6c\x5e\x63\x13'
-GCM_ADD = b'qualcomm-test'
+# Load environment variables from .env file
+load_dotenv()
+NETWORK = os.getenv("NETWORK").split(",")
+
+
+class Encryption(Enum):
+    ECB = "ECB"
+    GCM = "GCM"
 
 
 class ScanResult:
-    ip = ''
-    port = 0
-    id = ''
-    name = '<unknown>'
-    encryption_type = 'ECB'
-
-    def __init__(self, ip, port, id, name='', encryption_type='ECB'):
-        self.ip = ip
-        self.port = port
-        self.id = id
+    def __init__(
+        self,
+        address: tuple[str, int],
+        device_id: str,
+        name: str,
+        encryption_type: Encryption,
+    ):
+        self.ip = address[0]
+        self.port = address[1]
+        self.device_id = device_id
         self.name = name
         self.encryption_type = encryption_type
+        self.key = None
 
+    def encrypt_generic(self, data: str) -> str:
+        if self.encryption_type == Encryption.GCM:
+            return encrypt_GCM_generic(data)
+        else:
+            return encrypt_generic(data)
 
-def send_data(ip, port, data):
-    if args.verbose:
-        print(f'send_data: ip={ip}, port={port}, data={data}')
+    def decrypt_generic(self, *args) -> str:
+        if self.encryption_type == Encryption.GCM:
+            return decrypt_GCM_generic(*args)
+        else:
+            return decrypt_generic(args[0])
 
-    s = socket.socket(type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP)
-    s.settimeout(5)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    if hasattr(args, 'socket_interface') and args.socket_interface:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, args.socket_interface.encode('ascii'))
-    s.sendto(data, (ip, port))
-    return s.recv(1024)
+    def encrypt_request(self, pack: str) -> str:
+        request = f'{{"cid":"app","i":0,"t":"pack","uid":0,"tcid":"{self.device_id}",'
+        if self.encryption_type == Encryption.GCM:
+            data_encrypted = encrypt_GCM(pack, self.key)
+            return f'{request}"tag":"{data_encrypted["tag"]}","pack":"{data_encrypted["pack"]}"}}'
+        else:
+            pack_encrypted = encrypt(pack, self.key)
+            return f'{request}"pack":"{pack_encrypted}"}}'
+
+    def decrypt_response(self, response: str) -> Dict[str, str]:
+        if self.encryption_type == Encryption.GCM:
+            pack_decrypted = decrypt_GCM(response["pack"], response["tag"], self.key)
+        else:
+            pack_decrypted = decrypt(response["pack"], self.key)
+        pack_decrypted = json.loads(pack_decrypted)
+        if "cols" not in pack_decrypted:
+            return {"status": pack_decrypted["r"]}
+        return dict(zip(pack_decrypted["cols"], pack_decrypted["dat"]))
+
+    def __str__(self):
+        return f"ScanResult(ip={self.ip}, port={self.port}, device_id={self.device_id}, name={self.name}, encryption_type={self.encryption_type})"
 
 
 def create_request(tcid, pack_encrypted, i=0):
-    request = '{"cid":"app","i":' + str(i) + ',"t":"pack","uid":0,"tcid":"' + tcid + '",'
-    if (isinstance(pack_encrypted, dict)):
-        request += '"tag":"' + pack_encrypted["tag"] + '","pack":"' + pack_encrypted["pack"] + '"}'
+    request = f'{{"cid":"app","i":{i},"t":"pack","uid":0,"tcid":"{tcid}",'
+    if isinstance(pack_encrypted, dict):
+        request += (
+            f'"tag":"{pack_encrypted["tag"]}","pack":"{pack_encrypted["pack"]}"}}'
+        )
     else:
-        request += '"pack":"' + pack_encrypted + '"}'
-
+        request += f'"pack":"{pack_encrypted}"}}'
     return request
 
 
-def create_status_request_pack(tcid):
-    return '{"cols":["Pow","Mod","SetTem","WdSpd","Air","Blo","Health","SwhSlp","Lig","SwingLfRig","SwUpDn","Quiet",' \
-           '"Tur","StHt","TemUn","HeatCoolType","TemRec","SvSt"],"mac":"' + tcid + '","t":"status"}'
+def send_data(ip, port, data):
+    with socket.socket(type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP) as s:
+        s.settimeout(5)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.sendto(data, (ip, port))
+        return s.recv(1024)
 
 
-def add_pkcs7_padding(data):
-    length = 16 - (len(data) % 16)
-    padded = data + chr(length) * length
-    return padded
+def bind_device(scan_result: ScanResult) -> Optional[ScanResult]:
+    print(
+        f"Binding device: {scan_result.ip} ({scan_result.name}, ID: {scan_result.device_id}, encryption: {scan_result.encryption_type.name})"
+    )
 
+    pack = f'{{"mac":"{scan_result.device_id}","t":"bind","uid":0}}'
+    pack_encrypted = scan_result.encrypt_generic(pack)
 
-def create_cipher(key):
-    return Cipher(algorithms.AES(key.encode('utf-8')), modes.ECB(), backend=default_backend())
-
-
-def decrypt(pack_encoded, key):
-    decryptor = create_cipher(key).decryptor()
-    pack_decoded = base64.b64decode(pack_encoded)
-    pack_decrypted = decryptor.update(pack_decoded) + decryptor.finalize()
-    pack_unpadded = pack_decrypted[0:pack_decrypted.rfind(b'}') + 1]
-    return pack_unpadded.decode('utf-8')
-
-
-def decrypt_generic(pack_encoded):
-    return decrypt(pack_encoded, GENERIC_KEY)
-
-
-def encrypt(pack, key):
-    encryptor = create_cipher(key).encryptor()
-    pack_padded = add_pkcs7_padding(pack)
-    pack_encrypted = encryptor.update(bytes(pack_padded, encoding='utf-8')) + encryptor.finalize()
-    pack_encoded = base64.b64encode(pack_encrypted)
-    return pack_encoded.decode('utf-8')
-
-
-def encrypt_generic(pack):
-    return encrypt(pack, GENERIC_KEY)
-
-
-def create_GCM_cipher(key):
-    cipher = AES.new(bytes(key, 'utf-8'), AES.MODE_GCM, nonce=GCM_IV)
-    cipher.update(GCM_ADD)
-    return cipher
-
-
-def decrypt_GCM(pack_encoded, tag_encoded, key):
-    cipher = create_GCM_cipher(key)
-    base64decodedPack = base64.b64decode(pack_encoded)
-    base64decodedTag = base64.b64decode(tag_encoded)
-    decryptedPack = cipher.decrypt_and_verify(base64decodedPack, base64decodedTag)
-    decodedPack = decryptedPack.replace(b'\xff', b'').decode('utf-8')
-    return decodedPack
-
-
-def decrypt_GCM_generic(pack_encoded, tag_encoded):
-    return decrypt_GCM(pack_encoded, tag_encoded, GENERIC_GCM_KEY)
-
-
-def encrypt_GCM(pack, key):
-    encrypted_data, tag = create_GCM_cipher(key).encrypt_and_digest(pack.encode("utf-8"))
-    encrypted_pack = base64.b64encode(encrypted_data).decode('utf-8')
-    tag = base64.b64encode(tag).decode('utf-8')
-    data = {
-        "pack": encrypted_pack,
-        "tag": tag
-    }
-    return data
-
-
-def encrypt_GCM_generic(pack):
-    return encrypt_GCM(pack, GENERIC_GCM_KEY)
-
-
-def search_devices():
-    print('Searching for devices using broadcast address: %s' % args.broadcast)
-
-    s = socket.socket(type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP)
-    s.settimeout(5)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    if hasattr(args, 'socket_interface') and args.socket_interface:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_BINDTODEVICE, args.socket_interface.encode('ascii'))
-    s.sendto(b'{"t":"scan"}', (args.broadcast, 7000))
-
-    results = []
-
-    while True:
-        try:
-            (data, address) = s.recvfrom(1024)
-
-            if len(data) == 0:
-                continue
-
-            raw_json = data[0:data.rfind(b"}") + 1]
-
-            if args.verbose:
-                print(f'search_devices: data={data}, raw_json={raw_json}')
-
-            resp = json.loads(raw_json)
-
-            encryption_type = 'ECB'
-            if 'tag' in resp:
-                print('Setting the encryption to GCM because tag property is present in the responce')
-                encryption_type = 'GCM'
-
-            if encryption_type == 'GCM':
-                decrypted_pack = decrypt_GCM_generic(resp['pack'], resp['tag'])
-            else:
-                decrypted_pack = decrypt_generic(resp['pack'])
-
-            pack = json.loads(decrypted_pack)
-
-            cid = pack['cid'] if 'cid' in pack and len(pack['cid']) > 0 else \
-                resp['cid'] if 'cid' in resp else '<unknown-cid>'
-
-            if encryption_type != 'GCM' and 'ver' in pack:
-                ver = re.search(r'(?<=V)[0-9]+(?<=.)', pack['ver'])
-                if int(ver.group(0)) >= 2:
-                    print('Set GCM encryption because version in search responce is 2 or later')
-                    encryption_type = 'GCM';
-
-            results.append(ScanResult(address[0], address[1], cid, pack['name'] if 'name' in pack else '<unknown>', encryption_type))
-
-            if args.verbose:
-                print(f'search_devices: pack={pack}')
-
-        except socket.timeout:
-            print('Search finished, found %d device(s)' % len(results))
-            break
-
-    if len(results) > 0:
-        for r in results:
-            bind_device(r)
-
-
-def bind_device(search_result):
-    print('Binding device: %s (%s, ID: %s, encryption: %s)' % (search_result.ip, search_result.name, search_result.id, search_result.encryption_type))
-
-    pack = '{"mac":"%s","t":"bind","uid":0}' % search_result.id
-    if search_result.encryption_type == 'GCM':
-        pack_encrypted = encrypt_GCM_generic(pack)
-    else:
-        pack_encrypted = encrypt_generic(pack)
-
-    request = create_request(search_result.id, pack_encrypted, 1)
+    request = create_request(scan_result.device_id, pack_encrypted, 1)
     try:
-        result = send_data(search_result.ip, 7000, bytes(request, encoding='utf-8'))
+        result = send_data(
+            scan_result.ip, scan_result.port, bytes(request, encoding="utf-8")
+        )
     except socket.timeout:
-        print('Device %s is not responding on bind request' % search_result.ip)
-        if search_result.encryption_type != 'GCM':
-            search_result.encryption_type = 'GCM'
-            bind_device(search_result)
+        print("Device %s is not responding on bind request" % scan_result.ip)
+        if scan_result.encryption_type != Encryption.GCM:
+            scan_result.encryption_type = Encryption.GCM
+            return bind_device(scan_result)
+        return None
 
+    response = json.loads(result)
+    if response["t"] == "pack":
+        pack_decrypted = scan_result.decrypt_generic(
+            response["pack"], response.get("tag")
+        )
+
+        bind_resp = json.loads(pack_decrypted)
+
+        if "t" in bind_resp and bind_resp["t"].lower() == "bindok":
+            key = bind_resp["key"]
+            print("Bind to %s succeeded, key = %s" % (scan_result.device_id, key))
+            scan_result.key = key
+            return scan_result
+        return None
+    return None
+
+
+def search_devices(ip_address=None) -> Optional[ScanResult]:
+    print(f"Searching for devices using broadcast address: {ip_address}")
+    with socket.socket(type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP) as s:
+        s.settimeout(5)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        s.sendto(b'{"t":"scan"}', (ip_address, 7000))
+        try:
+            data, address = s.recvfrom(1024)
+            raw_json = data[: data.rfind(b"}") + 1]
+            resp = json.loads(raw_json)
+            encryption_type = Encryption.GCM if "tag" in resp else Encryption.ECB
+            decrypted_pack = (
+                decrypt_GCM_generic(resp["pack"], resp["tag"])
+                if encryption_type == Encryption.GCM
+                else decrypt_generic(resp["pack"])
+            )
+            pack = json.loads(decrypted_pack)
+            name = pack.get("name", pack.get("model", "<unknown>"))
+            cid = pack.get("cid", resp.get("cid", "<unknown-cid>"))
+            return bind_device(ScanResult(address, cid, name, encryption_type))
+        except socket.timeout:
+            print("No response from device")
+    return None
+
+
+def status_request_pack(device_id: str) -> str:
+    keywords = [
+        "Pow",
+        "Mod",
+        "SetTem",
+        "WdSpd",
+        "Air",
+        "Blo",
+        "Health",
+        "SwhSlp",
+        "Lig",
+        "SwingLfRig",
+        "SwUpDn",
+        "Quiet",
+        "Tur",
+        "StHt",
+        "TemUn",
+        "HeatCoolType",
+        "TemRec",
+        "SvSt",
+    ]
+    cols = ",".join(f'"{i}"' for i in keywords)
+    return f'''{{"cols":[{cols}],"mac":"{device_id}","t":"status"}}'''
+
+
+def get_param(device: ScanResult):
+    pack = status_request_pack(device.device_id)
+    request = device.encrypt_request(pack)
+    result = send_data(device.ip, device.port, request.encode())
+    if result is None:
+        print(f"Failed to get parameters from device {device.device_id}")
         return
 
     response = json.loads(result)
     if response["t"] == "pack":
-
-        if search_result.encryption_type == 'GCM':
-            pack_decrypted = decrypt_GCM_generic(response["pack"], response["tag"])
-        else:
-            pack_decrypted = decrypt_generic(response["pack"])
-
-        bind_resp = json.loads(pack_decrypted)
-
-        if args.verbose:
-            print(f'bind_device: resp={bind_resp}')
-
-        if 't' in bind_resp and bind_resp["t"].lower() == "bindok":
-            key = bind_resp['key']
-            print('Bind to %s succeeded, key = %s' % (search_result.id, key))
+        response_decrypted = device.decrypt_response(response)
+        print(response_decrypted)
 
 
-def get_param():
-    print(f'Getting parameters: {", ".join(args.params)}')
+def set_param(device: ScanResult, params: Dict[str, str]):
+    kv_list = [(key, f'"{value}"') for key, value in params.items()]
 
-    cols = ','.join(f'"{i}"' for i in args.params)
-
-    pack = f'{{"cols":[{cols}],"mac":"{args.id}","t":"status"}}'
-    request = '{"cid":"app","i":0,"t":"pack","uid":0,"tcid":"%s",' % args.id
-    if ENCRYPTION_TYPE == 'GCM':
-        data_encrypted = encrypt_GCM(pack, args.key)
-        request += '"tag":"%s","pack":"%s"}' % (data_encrypted["tag"], data_encrypted["pack"])
-    else:
-        pack_encrypted = encrypt(pack, args.key)
-        request += '"pack":"%s"}' % pack_encrypted
-
-    result = send_data(args.client, 7000, bytes(request, encoding='utf-8'))
-
-    response = json.loads(result)
-
-    if args.verbose:
-        print(f'get_param: response={response}')
-
-    if response["t"] == "pack":
-        pack = response["pack"]
-
-        if ENCRYPTION_TYPE == 'GCM':
-            tag = response["tag"]
-            pack_decrypted = decrypt_GCM(pack, tag, args.key)
-        else:
-            pack_decrypted = decrypt(pack, args.key)
-
-        pack_json = json.loads(pack_decrypted)
-
-        if args.verbose:
-            print(f'get_param: pack={pack}, json={pack_json}')
-
-        for col, dat in zip(pack_json['cols'], pack_json['dat']):
-            print('%s = %s' % (col, dat))
-
-
-def set_param():
-    kv_list = [i.split('=') for i in args.params]
-    errors = [i for i in kv_list if len(i) != 2]
-
-    if len(errors) > 0:
-        print(f'Invalid parameters detected: {errors}')
-        exit(1)
-
-    print(f'Setting parameters: {", ".join("=".join(i) for i in kv_list)}')
-
-    opts = ','.join(f'"{i[0]}"' for i in kv_list)
-    ps = ','.join(i[1] for i in kv_list)
+    opts = ",".join(f'"{i[0]}"' for i in kv_list)
+    ps = ",".join(i[1] for i in kv_list)
 
     pack = f'{{"opt":[{opts}],"p":[{ps}],"t":"cmd"}}'
-    print(pack)
 
-    request = '{"cid":"app","i":0,"t":"pack","tcid":"%s","uid":0,' % args.id
+    request = device.encrypt_request(pack)
 
-    if ENCRYPTION_TYPE == 'GCM':
-        data_encrypted = encrypt_GCM(pack, args.key)
-        request += '"tag":"%s","pack":"%s"}' % (data_encrypted["tag"], data_encrypted["pack"])
-    else:
-        pack_encrypted = encrypt(pack, args.key)
-        request += '"pack":"%s"}' % pack_encrypted
-
-    result = send_data(args.client, 7000, bytes(request, encoding='utf-8'))
+    result = send_data(device.ip, device.port, bytes(request, encoding="utf-8"))
 
     response = json.loads(result)
 
-    if args.verbose:
-        print(f'set_param: response={response}')
-
     if response["t"] == "pack":
-        pack = response["pack"]
+        response = device.decrypt_response(response)
 
-        if ENCRYPTION_TYPE == 'GCM':
-            tag = response["tag"]
-            pack_decrypted = decrypt_GCM(pack, tag, args.key)
-        else:
-            pack_decrypted = decrypt(pack, args.key)
-
-        pack_json = json.loads(pack_decrypted)
-
-        if args.verbose:
-            print(f'set_param: pack={pack}')
-
-        if pack_json['r'] != 200:
-            print('Failed to set parameter')
+        if response["status"] != 200:
+            print("Failed to set parameter")
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-
-    parser.add_help = True
-    parser.add_argument('command', help='You can use the following commands: search, get, set')
-    parser.add_argument('-c', '--client', help='IP address of the client device')
-    parser.add_argument('-b', '--broadcast', help='Broadcast IP address of the network the devices connecting to')
-    parser.add_argument('-i', '--id', help='Unique ID of the device (mac address)')
-    parser.add_argument('-k', '--key', help='Unique encryption key of the device')
-    parser.add_argument('-e', '--encryption', help='Set the encryption type AES128 used: ECB(default), GCM')
-    parser.add_argument('--verbose', help='Enable verbose logging', action='store_true')
-    if sys.platform == 'linux':
-        parser.add_argument('--socket-interface', help='Bind the socket to a specific network interface')
-    parser.add_argument('params', nargs='*', default=None, type=str)
-
-    args = parser.parse_args()
-
-    if args.encryption is None:
-        ENCRYPTION_TYPE = 'ECB'
-    else:
-        ENCRYPTION_TYPE = args.encryption
-
-    command = args.command.lower()
-    if command == 'search':
-        if args.broadcast is None:
-            print('Error: search command requires a broadcast IP address')
-            exit(1)
-        search_devices()
-    elif command == 'get':
-        if args.params is None or len(args.params) == 0 or args.client is None or args.id is None or args.key is None:
-            print('Error: get command requires a parameter name, a client IP (-c), a device ID (-i) and a device key '
-                  '(-k)')
-            exit(1)
-        get_param()
-    elif command == 'set':
-        if args.params is None or len(args.params) == 0 or args.client is None or args.id is None or args.key is None:
-            print('Error: set command requires at least one key=value pair, a client IP (-c), a device ID (-i) and a '
-                  'device key (-k)')
-            exit(1)
-        set_param()
-    else:
-        print('Error: unknown command "%s"' % args.command)
-        exit(1)
-
-
-if __name__ == '__main__':
-    pass
+if __name__ == "__main__":
+    for device_ip in NETWORK:
+        d = search_devices(device_ip)
+        print("Device found: %s" % d)
+        get_param(d)
+        set_param(d, {"Pow": "0", "SetTem": "30"})
