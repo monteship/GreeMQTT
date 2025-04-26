@@ -18,12 +18,14 @@ MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USER = os.getenv("MQTT_USER", "")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "gree")
-UPDATE_INTERVAL = int(os.getenv("UPDATE_INTERVAL", 4))  # Default interval is 5 seconds
+UPDATE_INTERVAL = int(os.getenv("UPDATE_INTERVAL", 4))
+
 # Configure loguru
 logger.add("logs/app.log", rotation="1 MB", retention="7 days", level="INFO")
+
 # Initialize MQTT client
 mqtt_client = mqtt.Client(
-    callback_api_version=2,
+    callback_api_version=2,  # type: ignore
     client_id="gree_mqtt_client",
 )
 if MQTT_USER and MQTT_PASSWORD:

@@ -41,7 +41,7 @@ def handle_get_params(device, mqtt_client, mqtt_topic, interval):
         if params:
             params = json.dumps(params)
             mqtt_client.publish(params_topic, params)
-            logger.info(f"Published {params_topic}: {params.replace(' ', '')}")
+            logger.info(f"{params_topic}: {params.replace(' ', '')}")
         else:
             logger.error(f"Failed to get parameters from device {device.device_id}.")
         time.sleep(interval)

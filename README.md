@@ -71,8 +71,8 @@ You can control the devices by publishing messages to the specified MQTT topic. 
 The application will periodically retrieve and publish device parameters to the specified MQTT topic. You can configure the update interval in the `.env` file or as an environment variable.
 ### 4. Example MQTT Messages
 - To set a parameter:
-```json
-{MQTT_TOPIC}/{deviceId}/set {"Pow":1,"SetTem":24}
+```bash
+MQTT_TOPIC/deviceId/set {"Pow":1,"SetTem":24}
 ```
 ## Logging
 The application uses the `logging` module to log messages. You can configure the logging level in the `.env` file or as an environment variable.
@@ -84,10 +84,7 @@ LOG_LEVEL=DEBUG
 - Check the MQTT broker settings and ensure that the application can connect to it.
 - Check the logs for any error messages.
 - If you encounter any issues, please open an issue on the GitHub repository.
-- For more detailed debugging, you can enable debug logging by setting the `LOG_LEVEL` environment variable to `DEBUG` in the `.env` file or as an environment variable.
-```env
-LOG_LEVEL=DEBUG
-```
+
 ## Contributing
 Contributions are welcome! If you have suggestions for improvements or new features, please open an issue or submit a pull request.
 ## License

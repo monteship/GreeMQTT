@@ -186,9 +186,7 @@ def get_param(device):
         return None
     response = json.loads(result)
     if response["t"] == "pack":
-        params = device.decrypt_response(response)
-        logger.debug(f"Parameters for device {device.device_id}: {params}")
-        return params
+        return device.decrypt_response(response)
     return None
 
 
