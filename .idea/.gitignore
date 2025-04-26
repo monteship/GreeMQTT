@@ -8,11 +8,3 @@
 /dataSources.local.xml
 
 # Gradle files
-/git_toolbox_prj.xml
-/GreeMQTT.iml
-/misc.xml
-/modules.xml
-/inspectionProfiles/profiles_settings.xml
-/inspectionProfiles/Project_Default.xml
-/ruff.xml
-/vcs.xml

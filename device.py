@@ -68,7 +68,7 @@ class ScanResult:
             pack_decrypted = decrypt(response["pack"], self.key)
         pack_decrypted = json.loads(pack_decrypted)
         if "cols" not in pack_decrypted:
-            return {"status": pack_decrypted["r"]}
+            return pack_decrypted
         return dict(zip(pack_decrypted["cols"], pack_decrypted["dat"]))
 
     def __str__(self):
@@ -193,14 +193,14 @@ def get_param(device):
 
 
 def set_params(device, params):
-    opts, ps = zip(*[(f'"{k}"', f'"{v}"') for k, v in params.items()])
+    opts, ps = zip(*[(f'"{k}"', f"{v}") for k, v in params.items()])
     pack = f'{{"opt":[{",".join(opts)}],"p":[{",".join(ps)}],"t":"cmd"}}'
     request = device.encrypt_request(pack)
     result = send_data(device.ip, device.port, request.encode())
     if result:
         response = json.loads(result)
-        if (
-            response["t"] == "pack"
-            and device.decrypt_response(response).get("status") != 200
-        ):
-            logger.error("Failed to set parameter")
+        if response["t"] == "pack":
+            decrypt_response = device.decrypt_response(response)
+            logger.debug(
+                f"Set parameters for device {device.device_id}: {zip(decrypt_response['opt'], decrypt_response['val'])}"
+            )
