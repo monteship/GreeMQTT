@@ -26,28 +26,24 @@ jobs:
         uses: docker/setup-qemu-action@v1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
       - name: Login to DockerHub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # Extract metadata (tags, labels) for Docker
-      # https://github.com/docker/metadata-action
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        uses: docker/metadata-action@v4
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       - name: Extract version
         run: echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
 
-      # Build and push Docker image with Buildx (don't push on PR)
-      # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
         with:
@@ -56,5 +52,5 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.package-version.outputs.current-version}}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
           labels: ${{ steps.meta.outputs.labels }}
