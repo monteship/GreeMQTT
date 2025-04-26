@@ -1,4 +1,5 @@
 import os
+import re
 from enum import Enum
 from typing import Optional, Dict
 
@@ -65,7 +66,7 @@ class ScanResult:
             pack_encrypted = encrypt(pack, self.key)
             return f'{request}"pack":"{pack_encrypted}"}}'
 
-    def decrypt_response(self, response: str) -> Dict[str, str]:
+    def decrypt_response(self, response: dict) -> Dict[str, str]:
         if self.encryption_type == Encryption.GCM:
             pack_decrypted = decrypt_GCM(response["pack"], response["tag"], self.key)
         else:
@@ -107,17 +108,14 @@ def bind_device(scan_result: ScanResult) -> Optional[ScanResult]:
     pack_encrypted = scan_result.encrypt_generic(pack)
 
     request = create_request(scan_result.device_id, pack_encrypted, 1)
-    try:
-        result = send_data(
-            scan_result.ip, scan_result.port, bytes(request, encoding="utf-8")
-        )
-    except socket.timeout:
-        print("Device %s is not responding on bind request" % scan_result.ip)
+
+    result = send_data(scan_result.ip, scan_result.port, request.encode())
+    if not result:
         if scan_result.encryption_type != Encryption.GCM:
             scan_result.encryption_type = Encryption.GCM
             return bind_device(scan_result)
         return None
-
+    response = json.loads(result)
     response = json.loads(result)
     if response["t"] == "pack":
         pack_decrypted = scan_result.decrypt_generic(
@@ -155,6 +153,13 @@ def search_devices(ip_address=None) -> Optional[ScanResult]:
             pack = json.loads(decrypted_pack)
             name = pack.get("name", pack.get("model", "<unknown>"))
             cid = pack.get("cid", resp.get("cid", "<unknown-cid>"))
+            if encryption_type != Encryption.GCM and "ver" in pack:
+                ver = re.search(r"(?<=V)[0-9]+(?<=.)", pack["ver"])
+                if int(ver.group(0)) >= 2:
+                    print(
+                        "Set GCM encryption because version in search responce is 2 or later"
+                    )
+                    encryption_type = Encryption.GCM
             return bind_device(ScanResult(address, cid, name, encryption_type))
         except socket.timeout:
             print("No response from device")
@@ -186,38 +191,28 @@ def status_request_pack(device_id: str) -> str:
     return f'''{{"cols":[{cols}],"mac":"{device_id}","t":"status"}}'''
 
 
-def get_param(device: ScanResult):
-    pack = status_request_pack(device.device_id)
-    request = device.encrypt_request(pack)
+def get_param(device):
+    request = device.encrypt_request(status_request_pack(device.device_id))
     result = send_data(device.ip, device.port, request.encode())
-    if result is None:
+    if not result:
         print(f"Failed to get parameters from device {device.device_id}")
         return
-
     response = json.loads(result)
     if response["t"] == "pack":
-        response_decrypted = device.decrypt_response(response)
-        print(response_decrypted)
+        print(device.decrypt_response(response))
 
 
-def set_param(device: ScanResult, params: Dict[str, str]):
-    kv_list = [(key, f'"{value}"') for key, value in params.items()]
-
-    opts = ",".join(f'"{i[0]}"' for i in kv_list)
-    ps = ",".join(i[1] for i in kv_list)
-
-    pack = f'{{"opt":[{opts}],"p":[{ps}],"t":"cmd"}}'
-
+def set_param(device, params):
+    opts, ps = zip(*[(f'"{k}"', f'"{v}"') for k, v in params.items()])
+    pack = f'{{"opt":[{",".join(opts)}],"p":[{",".join(ps)}],"t":"cmd"}}'
     request = device.encrypt_request(pack)
-
-    result = send_data(device.ip, device.port, bytes(request, encoding="utf-8"))
-
-    response = json.loads(result)
-
-    if response["t"] == "pack":
-        response = device.decrypt_response(response)
-
-        if response["status"] != 200:
+    result = send_data(device.ip, device.port, request.encode())
+    if result:
+        response = json.loads(result)
+        if (
+            response["t"] == "pack"
+            and device.decrypt_response(response).get("status") != 200
+        ):
             print("Failed to set parameter")
 
 
