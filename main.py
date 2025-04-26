@@ -12,7 +12,7 @@ import paho.mqtt.client as mqtt
 
 # Load environment variables
 load_dotenv()
-NETWORK = os.getenv("NETWORK").split(",")
+NETWORK = os.getenv("NETWORK", "localhost").split(",")
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USER = os.getenv("MQTT_USER", "")
