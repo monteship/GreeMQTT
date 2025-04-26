@@ -155,24 +155,25 @@ def search_devices(ip_address=None) -> Optional[ScanResult]:
 
 def status_request_pack(device_id: str) -> str:
     keywords = [
-        "Pow",
-        "Mod",
-        "SetTem",
-        "WdSpd",
-        "Air",
-        "Blo",
-        "Health",
-        "SwhSlp",
-        "Lig",
-        "SwingLfRig",
-        "SwUpDn",
-        "Quiet",
-        "Tur",
-        "StHt",
-        "TemUn",
-        "HeatCoolType",
-        "TemRec",
-        "SvSt",
+        "Pow",  # power state of the device
+        "Mod",  # mode of the device (auto, cool, dry, fan, heat)
+        "SetTem",  # set temperature
+        "TemUn",  # temperature unit (Celsius or Fahrenheit)
+        "WdSpd",  # fan speed (auto, low, medium-low, medium, medium-high, high)
+        "Air",  # controls the state of the fresh air valve (not available on all units)
+        "Blo",  # "Blow" or "X-Fan", this function keeps the fan running for a while after shutting down. Only usable in Dry and Cool mode
+        "Health",  # controls Health ("Cold plasma") mode, only for devices equipped with "anion generator", which absorbs dust and kills bacteria
+        "SwhSlp",  # sleep mode, which gradually changes the temperature in Cool, Heat and Dry mode
+        "Lig",  # turns all indicators and the display on the unit on or off
+        "SwingLfRig",  # controls the swing mode of the horizontal air blades (available on limited number of devices, e.g. some Cooper & Hunter units - thanks to mvmn)
+        "SwUpDn",  # controls the swing mode of the vertical air blades
+        "Quiet",  # controls the Quiet mode which slows down the fan to its most quiet speed. Not available in Dry and Fan mode.
+        "Tur",  # sets fan speed to the maximum. Fan speed cannot be changed while active and only available in Dry and Cool mode
+        "StHt",  # maintain the room temperature steadily at 8°C and prevent the room from freezing by heating operation when nobody is at home for long in severe winter (from http://www.gree.ca/en/features)
+        # "HeatCoolType",  # unknown
+        # "TemRec",  # this bit is used to distinguish between two Fahrenheit values (see Setting the temperature using Fahrenheit section below)
+        "SvSt",  # energy saving mode
+        "TemSen",  # temperature sensor (internal or external) with offset +40
     ]
     cols = ",".join(f'"{i}"' for i in keywords)
     return f'''{{"cols":[{cols}],"mac":"{device_id}","t":"status"}}'''
@@ -186,7 +187,11 @@ def get_param(device):
         return None
     response = json.loads(result)
     if response["t"] == "pack":
-        return device.decrypt_response(response)
+        params = device.decrypt_response(response)
+
+        if "TemSen" in params:
+            params["TemSen"] = int(params["TemSen"]) - 40
+        return params
     return None
 
 
