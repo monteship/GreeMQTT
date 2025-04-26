@@ -5,7 +5,10 @@ from typing import Optional, Dict
 
 from dotenv import load_dotenv
 
+import paho.mqtt.client as mqtt
 
+import threading
+import time
 import json
 import socket
 
@@ -23,6 +26,16 @@ from encryptor import (
 # Load environment variables from .env file
 load_dotenv()
 NETWORK = os.getenv("NETWORK").split(",")
+
+
+# MQTT Configuration
+MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
+MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
+MQTT_TOPIC = os.getenv("MQTT_TOPIC", "gree")
+
+# Initialize MQTT client
+mqtt_client = mqtt.Client()
+mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 
 
 class Encryption(Enum):
@@ -199,10 +212,16 @@ def get_param(device):
         return
     response = json.loads(result)
     if response["t"] == "pack":
-        print(device.decrypt_response(response))
+        params = device.decrypt_response(response)
+
+        device_topic = f"{MQTT_TOPIC}/{device.device_id}"
+        payload = json.dumps(params)
+
+        mqtt_client.publish(device_topic, payload)
+        print(f"Published to MQTT topic {device_topic}: {payload}")
 
 
-def set_param(device, params):
+def set_params(device, params):
     opts, ps = zip(*[(f'"{k}"', f'"{v}"') for k, v in params.items()])
     pack = f'{{"opt":[{",".join(opts)}],"p":[{",".join(ps)}],"t":"cmd"}}'
     request = device.encrypt_request(pack)
@@ -216,9 +235,53 @@ def set_param(device, params):
             print("Failed to set parameter")
 
 
+def periodic_update(device, interval=5):
+    """Periodically fetch and publish device parameters."""
+    while True:
+        get_param(device)
+        time.sleep(interval)
+
+
+def handle_set_params(device):
+    """Subscribe to the set topic and handle incoming messages to set parameters."""
+
+    def on_message(client, userdata, msg):
+        try:
+            params = json.loads(msg.payload.decode("utf-8"))
+            set_params(device, params)
+        except json.JSONDecodeError:
+            print(f"Invalid JSON received on topic {msg.topic}: {msg.payload}")
+
+    set_topic = f"{MQTT_TOPIC}/{device.device_id}/set"
+    mqtt_client.subscribe(set_topic)
+    mqtt_client.message_callback_add(set_topic, on_message)
+
+    print(f"Subscribed to topic {set_topic} for setting parameters.")
+    while True:
+        time.sleep(1)  # Keep the thread alive
+
+
 if __name__ == "__main__":
+    threads = []
     for device_ip in NETWORK:
         d = search_devices(device_ip)
-        print("Device found: %s" % d)
-        get_param(d)
-        set_param(d, {"Pow": "0", "SetTem": "30"})
+        if d:
+            print("Device found: %s" % d)
+            # Start a thread for periodic updates
+            thread = threading.Thread(target=periodic_update, args=(d,))
+            thread.daemon = True  # Daemonize thread to exit with the main program
+            threads.append(thread)
+            thread.start()
+
+            # Start a thread to handle set_params
+            set_thread = threading.Thread(target=handle_set_params, args=(d,))
+            set_thread.daemon = True
+            threads.append(set_thread)
+            set_thread.start()
+
+    # Keep the main thread alive
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Exiting...")
