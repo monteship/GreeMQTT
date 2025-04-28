@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from loguru import logger
 
 import json
@@ -74,7 +76,7 @@ class ScanResult:
         return dict(zip(pack_decrypted["cols"], pack_decrypted["dat"]))
 
     def __str__(self):
-        return f"ScanResult(ip={self.ip}, port={self.port}, device_id={self.device_id}, name={self.name}, encryption_type={self.encryption_type})"
+        return f"ScanResult(ip={self.ip}, port={self.port}, device_id={self.device_id}, name={self.name}, encryption_type={self.encryption_type.value})"
 
 
 def create_request(tcid, pack_encrypted, i=0):
@@ -160,6 +162,65 @@ def status_request_pack(device_id: str) -> str:
     return f'''{{"cols":[{cols}],"mac":"{device_id}","t":"status"}}'''
 
 
+CONVERT = {
+    "Pow": {
+        0: "off",
+        1: "on",
+    },
+    "Mod": {
+        0: "auto",
+        1: "cool",
+        2: "dry",
+        3: "fan_only",
+        4: "heat",
+    },
+    "WdSpd": {
+        0: "auto",
+        1: "low",
+        2: "medium-low",
+        3: "medium",
+        4: "medium-high",
+        5: "high",
+    },
+    "SwUpDn": {
+        0: "default",
+        1: "full_swing",
+        2: "fixed_upmost",
+        3: "fixed_middle_up",
+        4: "fixed_middle",
+        5: "fixed_middle_low",
+        6: "fixed_lowest",
+        7: "swing_downmost",
+        8: "swing_middle_low",
+        9: "swing_middle",
+        10: "swing_middle_up",
+        11: "swing_upmost",
+    },
+}
+
+
+def params_convert(params: dict, back=False) -> dict:
+    """Convert parameters to a dictionary."""
+    params_dict = {}
+    if back:
+        for key, value in params.items():
+            if key in CONVERT:
+                for k, v in CONVERT[key].items():
+                    if v == value:
+                        params_dict[key] = k
+                        break
+            else:
+                params_dict[key] = value
+    else:
+        for key, value in params.items():
+            if key in CONVERT:
+                params_dict[key] = CONVERT[key].get(value, value)
+            else:
+                params_dict[key] = value
+        params_dict["last_seen"] = datetime.now(timezone.utc).timestamp()
+    return params_dict
+
+
 def get_param(device):
     request = device.encrypt_request(status_request_pack(device.device_id))
     result = send_data(device.ip, device.port, request.encode())
@@ -172,11 +233,15 @@ def get_param(device):
 
         if "TemSen" in params:
             params["TemSen"] = int(params["TemSen"]) - 40
-        return params
+
+        return params_convert(params)
     return None
 
 
 def set_params(device, params):
+    """Set parameters for the device."""
+    params = params_convert(params, back=True)
+
     opts, ps = zip(*[(f'"{k}"', f"{v}") for k, v in params.items()])
     pack = f'{{"opt":[{",".join(opts)}],"p":[{",".join(ps)}],"t":"cmd"}}'
     request = device.encrypt_request(pack)
@@ -185,6 +250,8 @@ def set_params(device, params):
         response = json.loads(result)
         if response["t"] == "pack":
             decrypt_response = device.decrypt_response(response)
+            opt = decrypt_response.get("opt")
+            val = decrypt_response.get("val")
             logger.debug(
-                f"Set parameters for device {device.device_id}: {zip(decrypt_response['opt'], decrypt_response['val'])}"
+                f"Set parameters for device {device.device_id}: {zip(opt, val) if opt and val else 'No response'}"
             )
