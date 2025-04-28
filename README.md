@@ -74,10 +74,75 @@ The application will periodically retrieve and publish device parameters to the 
 ```bash
 MQTT_TOPIC/deviceId/set {"Pow":1,"SetTem":24}
 ```
-## Logging
-The application uses the `logging` module to log messages. You can configure the logging level in the `.env` file or as an environment variable.
-```env
-LOG_LEVEL=DEBUG
+## Home Assistant Integration
+To integrate with Home Assistant, you can use the MQTT integration. Add the following configuration to your `configuration.yaml` file:
+```yaml
+    - unique_id: "kitchen_ac"
+      name: "Kitchen Gree AC"
+      precision: 1
+      temperature_command_topic: "gree/deviceId/set"
+      temperature_command_template: >
+        {"SetTem":{{ value | int }}}
+      temperature_state_topic: "gree/deviceId"
+      temperature_state_template: "{{ value_json.SetTem }}"
+
+      current_temperature_topic: "gree/deviceId"
+      current_temperature_template: "{{ value_json.TemSen }}"
+
+      mode_command_topic: "gree/deviceId/set"
+      mode_command_template: >
+        {% if value == 'off' %}
+          {"Pow":"off"}
+        {% else %}
+          {"Pow":"on","Mod":"{{ value }}"}
+        {% endif %}
+      mode_state_topic: "gree/deviceId"
+      mode_state_template: >
+        {% if value_json.Pow == "off" %}
+          off
+        {% else %}
+          {{ value_json.Mod }}
+        {% endif %}
+      modes:
+        - "off"
+        - "auto"
+        - "cool"
+        - "dry"
+        - "fan_only"
+        - "heat"
+
+      fan_mode_command_topic: "gree/deviceId/set"
+      fan_mode_command_template: >
+        {"WdSpd":"{{ value }}"}
+      fan_mode_state_topic: "gree/deviceId"
+      fan_mode_state_template: "{{ value_json.WdSpd }}"
+      fan_modes:
+        - auto
+        - low
+        - medium
+        - high
+
+      swing_mode_command_topic: "gree/deviceId/set"
+      swing_mode_command_template: >
+        {"SwUpDn":"{{ value }}"}
+      swing_mode_state_topic: "gree/deviceId"
+      swing_mode_state_template: "{{ value_json.SwUpDn }}"
+      swing_modes:
+        - "default"
+        - "full_swing"
+        - "fixed_upmost"
+        - "fixed_middle_up"
+        - "fixed_middle"
+        - "fixed_middle_low"
+        - "fixed_lowest"
+        - "swing_downmost"
+        - "swing_middle_low"
+        - "swing_middle"
+        - "swing_middle_up"
+        - "swing_upmost"
+
+      qos: 0
+      retain: false
 ```
 ## Troubleshooting
 - Ensure that the devices are on the same network as the application.

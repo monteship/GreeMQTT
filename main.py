@@ -11,7 +11,8 @@ import paho.mqtt.client as mqtt
 
 
 def version():
-    return open("VERSION", "r").read().strip()
+    with open("VERSION", "r").read().strip() as version_file:
+        return version_file.read().strip()
 
 
 # Configure loguru
@@ -34,7 +35,7 @@ mqtt_client.loop_start()
 
 
 if __name__ == "__main__":
-    logger.info(f"Starting GreeMQTT v{version()}...")
+    logger.info(f"Starting GreeMQTT v{version}...")
     threads = []
     for device_ip in NETWORK:
         d = search_devices(device_ip)
