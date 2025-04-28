@@ -252,6 +252,4 @@ def set_params(device, params):
             decrypt_response = device.decrypt_response(response)
             opt = decrypt_response.get("opt")
             val = decrypt_response.get("val")
-            logger.debug(
-                f"Set parameters for device {device.device_id}: {zip(opt, val) if opt and val else 'No response'}"
-            )
+            logger.debug(f"Set parameters for device {device.device_id}: {opt} = {val}")
