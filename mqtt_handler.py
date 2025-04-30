@@ -17,18 +17,21 @@ def safe_handle(func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        while True:  # Keep the thread running
+        stop_event = args[2] if len(args) > 2 else kwargs.get("stop_event")
+        while not (stop_event and stop_event.is_set()):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
                 logger.error(f"Error in {func.__name__}: {e}")
-                time.sleep(1)  # Optional: Add a delay before retrying
+                time.sleep(1)
+        logger.info(f"{func.__name__} stopped due to stop_event.")
+        return None
 
     return wrapper
 
 
 @safe_handle
-def handle_set_params(device, mqtt_client):
+def handle_set_params(device, mqtt_client, stop_event):
     """Subscribe to the set topic and handle incoming messages to set parameters."""
 
     def on_message(client, userdata, msg):
@@ -49,22 +52,21 @@ def handle_set_params(device, mqtt_client):
         logger.error(f"Failed to subscribe to topic {set_topic}, result code: {result}")
         return
 
-    while True:
-        time.sleep(1)  # Keep the thread alive
+    while not stop_event.is_set():
+        stop_event.wait(0.5)  # Check if the stop event is set
 
 
 @safe_handle
-def handle_get_params(device, mqtt_client):
+def handle_get_params(device, mqtt_client, stop_event):
     """Periodically fetch and publish device parameters."""
     params_topic = f"{MQTT_TOPIC}/{device.device_id}"
     logger.info(f"Publishing device parameters to topic {params_topic}.")
-    while True:
+    while not stop_event.is_set():
         params = get_param(device)
         if params:
-            params["last_seen"] = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
             params = json.dumps(params)
             mqtt_client.publish(params_topic, params)
             logger.info(f"{params_topic}: {params.replace(' ', '')}")
         else:
             logger.error(f"Failed to get parameters from device {device.device_id}.")
-        time.sleep(UPDATE_INTERVAL)
+        stop_event.wait(UPDATE_INTERVAL)
