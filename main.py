@@ -8,19 +8,7 @@ from config import MQTT_BROKER, MQTT_PASSWORD, MQTT_PORT, MQTT_USER, NETWORK
 from device import search_devices
 from mqtt_handler import handle_get_params, handle_set_params
 
-
-def version():
-    with open("VERSION", "r").read().strip() as version_file:
-        return version_file.read().strip()
-
-
-# Configure loguru
-logger.add(
-    "logs/app.log",
-    rotation="1 MB",
-    retention="7 days",
-    level="INFO",
-)
+from typing import Callable, Tuple, List
 
 # Initialize MQTT client
 mqtt_client = mqtt.Client(
@@ -33,7 +21,13 @@ mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start()
 
 
-def run_thread(target, args):
+def run_thread(target: Callable, args: Tuple):
+    """
+    Run a function in a separate thread.
+    :param target:
+    :param args:
+    :return:
+    """
     thread = threading.Thread(target=target, args=args)
     thread.daemon = True
     thread.start()
@@ -41,8 +35,7 @@ def run_thread(target, args):
 
 
 if __name__ == "__main__":
-    logger.info(f"Starting GreeMQTT v{version}...")
-    threads = []
+    threads: List[threading.Thread,] = []
     stop_event = threading.Event()
 
     for device_ip in NETWORK:
@@ -50,10 +43,20 @@ if __name__ == "__main__":
         if d:
             logger.info(f"Device found: {d}")
             # Start a thread for periodic updates
-            threads.append(run_thread(handle_get_params, (d, mqtt_client, stop_event)))
+            threads.append(
+                run_thread(
+                    handle_get_params,
+                    (d, mqtt_client, stop_event),
+                ),
+            )
 
             # Start a thread to handle set_params
-            threads.append(run_thread(handle_set_params, (d, mqtt_client, stop_event)))
+            threads.append(
+                run_thread(
+                    handle_set_params,
+                    (d, mqtt_client, stop_event),
+                ),
+            )
 
     # Keep the main thread alive
     try:
