@@ -1,14 +1,12 @@
 name: Docker
 
 on:
-  push:
-    branches:
-      - master
+  release:
+    types: [published]
 
 env:
   REGISTRY: docker.io
   IMAGE_NAME: monteship/greemqtt
-
 
 jobs:
   build:
@@ -42,7 +40,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
       - name: Extract version
-        run: echo "VERSION=$(cat VERSION)" >> $GITHUB_ENV
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
