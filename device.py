@@ -1,16 +1,14 @@
-from loguru import logger
-
 import json
 import re
 import socket
 from typing import Optional, Dict, Tuple
 
+from loguru import logger
+
 from config import TRACKING_PARAMS
 from encryptor import encrypt, decrypt
 from utils import params_convert
 
-# Configure loguru
-logger.add("logs/app.log", rotation="1 MB", retention="7 days", level="INFO")
 
 # Constants
 SOCKET_TIMEOUT = 5
@@ -20,7 +18,11 @@ UDP_PORT = 7000
 
 class ScanResult:
     def __init__(
-        self, address: Tuple[str, int], device_id: str, name: str, is_GCM: bool = False
+        self,
+        address: Tuple[str, int],
+        device_id: str,
+        name: str,
+        is_GCM: bool = False,
     ):
         self.ip = address[0]
         self.port = address[1]
@@ -58,10 +60,10 @@ def bind_request(scan_result: ScanResult, i=0) -> bytes:
 
 def send_data(scan_result: ScanResult, request: bytes) -> Optional[bytes]:
     with socket.socket(type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP) as s:
-        s.settimeout(5)
+        s.settimeout(SOCKET_TIMEOUT)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.sendto(request, (scan_result.ip, scan_result.port))
-        return s.recv(1024)
+        return s.recv(BUFFER_SIZE)
 
 
 def bind_device(scan_result: ScanResult) -> Optional[ScanResult]:
@@ -92,7 +94,7 @@ def search_devices(ip_address=None) -> Optional[ScanResult]:
         s.settimeout(5)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        s.sendto(b'{"t":"scan"}', (ip_address, 7000))
+        s.sendto(b'{"t":"scan"}', (ip_address, UDP_PORT))
         try:
             data, address = s.recvfrom(1024)
             raw_json = data[: data.rfind(b"}") + 1]
@@ -100,11 +102,11 @@ def search_devices(ip_address=None) -> Optional[ScanResult]:
             is_GCM = "tag" in response
             decrypted_response = decrypt(response, is_GCM=is_GCM)
 
-            name = decrypted_response.get("name")
+            name = decrypted_response.get("name", "Unknown")
             cid = decrypted_response.get("cid", response.get("cid"))
             if not is_GCM and "ver" in decrypted_response:
                 ver = re.search(r"(?<=V)[0-9]+(?<=.)", decrypted_response["ver"])
-                if int(ver.group(0)) >= 2:
+                if ver and int(ver.group(0)) >= 2:
                     logger.info(
                         "Set GCM encryption because version in search responce is 2 or later"
                     )
