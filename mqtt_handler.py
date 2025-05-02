@@ -1,4 +1,4 @@
-# mqtt_handler.py
+import threading
 
 from loguru import logger
 from functools import wraps
@@ -7,16 +7,18 @@ import json
 import time
 
 from config import MQTT_TOPIC, UPDATE_INTERVAL
-from device import set_params, get_param
+from device import ScanResult, set_params, get_param
 
-logger.add("logs/app.log", rotation="1 MB", retention="7 days", level="INFO")
+import paho.mqtt.client as mqtt
+
+from typing import Callable
 
 
-def safe_handle(func):
+def safe_handle(func: Callable) -> Callable:
     """Decorator to safely handle exceptions in functions."""
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args, **kwargs) -> None:
         stop_event = args[2] if len(args) > 2 else kwargs.get("stop_event")
         while not (stop_event and stop_event.is_set()):
             try:
@@ -31,7 +33,11 @@ def safe_handle(func):
 
 
 @safe_handle
-def handle_set_params(device, mqtt_client, stop_event):
+def handle_set_params(
+    device: ScanResult,
+    mqtt_client: mqtt.Client,
+    stop_event: threading.Event,
+):
     """Subscribe to the set topic and handle incoming messages to set parameters."""
 
     def on_message(client, userdata, msg):
@@ -57,16 +63,20 @@ def handle_set_params(device, mqtt_client, stop_event):
 
 
 @safe_handle
-def handle_get_params(device, mqtt_client, stop_event):
+def handle_get_params(
+    device: ScanResult,
+    mqtt_client: mqtt.Client,
+    stop_event: threading.Event,
+):
     """Periodically fetch and publish device parameters."""
     params_topic = f"{MQTT_TOPIC}/{device.device_id}"
     logger.info(f"Publishing device parameters to topic {params_topic}.")
     while not stop_event.is_set():
         params = get_param(device)
         if params:
-            params = json.dumps(params)
-            mqtt_client.publish(params_topic, params)
-            logger.info(f"{params_topic}: {params.replace(' ', '')}")
+            params_str = json.dumps(params)
+            mqtt_client.publish(params_topic, params_str)
+            logger.info(f"{params_topic}: {params_str.replace(' ', '')}")
         else:
             logger.error(f"Failed to get parameters from device {device.device_id}.")
         stop_event.wait(UPDATE_INTERVAL)
