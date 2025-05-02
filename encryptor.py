@@ -1,6 +1,6 @@
 import base64
 import json
-from typing import Optional
+from typing import Optional, Any, Dict
 
 from Crypto.Cipher import AES
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -13,13 +13,13 @@ GCM_IV = b"\x54\x40\x78\x44\x49\x67\x5a\x51\x6c\x5e\x63\x13"
 GCM_ADD = b"qualcomm-test"
 
 
-def create_cipher(key) -> Cipher:
+def create_cipher(key: str) -> Any:
     return Cipher(
         algorithms.AES(key.encode("utf-8")), modes.ECB(), backend=default_backend()
     )
 
 
-def create_GCM_cipher(key) -> AES:
+def create_GCM_cipher(key) -> Any:
     cipher = AES.new(bytes(key, "utf-8"), AES.MODE_GCM, nonce=GCM_IV)
     cipher.update(GCM_ADD)
     return cipher
@@ -31,7 +31,7 @@ def add_pkcs7_padding(data) -> str:
     return padded
 
 
-def decrypt_ECB(response: dict, key: Optional[str]) -> dict:
+def decrypt_ECB(response: Dict, key: Optional[str]) -> Dict:
     decryptor = create_cipher(key or GENERIC_KEY).decryptor()
     pack_decoded = base64.b64decode(response["pack"])
     pack_decrypted = decryptor.update(pack_decoded) + decryptor.finalize()
@@ -39,7 +39,7 @@ def decrypt_ECB(response: dict, key: Optional[str]) -> dict:
     return json.loads(pack_unpadded.decode("utf-8"))
 
 
-def decrypt_GCM(response: dict, key: Optional[str]) -> dict:
+def decrypt_GCM(response: Dict, key: Optional[str]) -> Dict:
     cipher = create_GCM_cipher(key or GENERIC_GCM_KEY)
     base64decodedPack = base64.b64decode(response["pack"])
     base64decodedTag = base64.b64decode(response["tag"])
@@ -47,13 +47,13 @@ def decrypt_GCM(response: dict, key: Optional[str]) -> dict:
     return json.loads(decryptedPack.replace(b"\xff", b"").decode("utf-8"))
 
 
-def decrypt(response: dict, key: Optional[str] = None, is_GCM=False) -> dict:
+def decrypt(response: Dict, key: Optional[str] = None, is_GCM: bool = False) -> Dict:
     if is_GCM or "tag" in response:
         return decrypt_GCM(response, key=key)
     return decrypt_ECB(response, key=key)
 
 
-def encrypt_ECB(pack, key: Optional[str]) -> dict:
+def encrypt_ECB(pack: str, key: Optional[str]) -> Dict:
     encryptor = create_cipher(key or GENERIC_KEY).encryptor()
     pack_padded = add_pkcs7_padding(pack)
     pack_encrypted = (
@@ -63,7 +63,7 @@ def encrypt_ECB(pack, key: Optional[str]) -> dict:
     return {"pack": pack_encoded.decode("utf-8")}
 
 
-def encrypt_GCM(pack, key: Optional[str]) -> dict:
+def encrypt_GCM(pack: str, key: Optional[str]) -> Dict:
     encrypted_data, tag = create_GCM_cipher(key or GENERIC_GCM_KEY).encrypt_and_digest(
         pack.encode("utf-8")
     )
@@ -72,7 +72,7 @@ def encrypt_GCM(pack, key: Optional[str]) -> dict:
     return {"pack": encrypted_pack, "tag": tag}
 
 
-def encrypt(pack, key: Optional[str] = None, is_GCM=False) -> dict:
+def encrypt(pack, key: Optional[str] = None, is_GCM: bool = False) -> Dict:
     if is_GCM:
         return encrypt_GCM(pack, key=key)
     return encrypt_ECB(pack, key=key)
