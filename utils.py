@@ -1,6 +1,8 @@
 from datetime import datetime, UTC
 
-CONVERT_PARAMS = {
+from typing import Dict
+
+CONVERT_PARAMS: Dict = {
     "Pow": {
         0: "off",
         1: "on",
@@ -82,31 +84,33 @@ CONVERT_PARAMS = {
 }
 
 
-def params_convert(params: dict, back=False) -> dict:
-    """Convert parameters to a dictionary."""
-    params_dict = {}
+def params_convert(params: Dict, back: bool = False) -> Dict[str, str | int]:
+    """
+    Convert parameters between human-readable format and device format.
+    :param params:
+    :param back:
+    :return:
+    """
     if back:
         for key, value in params.items():
             if key in CONVERT_PARAMS:
                 for k, v in CONVERT_PARAMS[key].items():
                     if v == value:
-                        params_dict[key] = k
+                        params[key] = k
                         break
             else:
-                params_dict[key] = value
-        return params_dict
+                params[key] = value
+        return params
 
     for key, value in params.items():
         if key in CONVERT_PARAMS:
-            params_dict[key] = CONVERT_PARAMS[key].get(value, value)
+            params[key] = CONVERT_PARAMS[key].get(value, value)
         else:
-            params_dict[key] = value
+            params[key] = value
 
-    if "SetTem" in params_dict:
-        params_dict["TemSen"] = params_dict["TemSen"] - 40
+    if "SetTem" in params:
+        params["TemSen"] = params["TemSen"] - 40
 
-    params_dict["last_seen"] = (
-        datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-    )
+    params["last_seen"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
-    return params_dict
+    return params
