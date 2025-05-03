@@ -1,7 +1,8 @@
 import sqlite3
 from typing import Optional, Tuple
+import os
 
-DB_PATH = "devices.db"
+DB_PATH = os.path.join(os.getcwd(), "devices.db")
 
 
 def init_db():
