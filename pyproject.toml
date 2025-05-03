@@ -29,7 +29,7 @@ classifiers = [
 Homepage = "https://github.com/monteship/GreeMQTT"
 
 [tool.setuptools]
-py-modules = ["mqtt_handler", "device", "utils", "config"]
+py-modules = ["main", "device_db.py", "mqtt_handler", "device", "utils", "config"]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
