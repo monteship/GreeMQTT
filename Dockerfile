@@ -19,7 +19,12 @@ RUN pip install --no-cache-dir --disable-pip-version-check --prefix=/install .
 
 # Stage 2: Final Image
 FROM python:3.13-slim
-# Create non-root user
+LABEL authors="monteship"
+LABEL description="MQTT client for monitoring and controlling devices"
+
+RUN mkdir -p /app && chmod 777 /app
+
+# Create a non-root user and group
 RUN useradd --create-home appuser
 
 WORKDIR /app
@@ -28,7 +33,7 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 
 # Copy only necessary project files
-COPY main.py config.py device.py encryptor.py mqtt_handler.py utils.py README.md /app/
+COPY config.py device.py device_db.py encryptor.py main.py managers.py mqtt_handler.py utils.py README.md /app/
 
 
 # Set environment variables for Python
