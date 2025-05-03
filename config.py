@@ -6,7 +6,9 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-NETWORK: List[str] = os.getenv("NETWORK", "192.168.1.40,192.168.1.41").split(",")
+NETWORK: List[str] = os.getenv(
+    "NETWORK", "192.168.1.40,192.168.1.41,192.168.1.42"
+).split(",")
 
 # Set MQTT parameters
 MQTT_BROKER: str = os.getenv("MQTT_BROKER", "192.168.1.10")
