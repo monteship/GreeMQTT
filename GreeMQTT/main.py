@@ -8,7 +8,7 @@ from GreeMQTT.mqtt_client import create_mqtt_client
 from GreeMQTT.device import Device
 from GreeMQTT.device_db import device_db
 from GreeMQTT.managers import DeviceRetryManager, start_device_tasks
-from GreeMQTT.mqtt_handler import handle_set_params
+from GreeMQTT.mqtt_handler import set_params
 
 
 async def main():
@@ -41,7 +41,7 @@ async def main():
         else:
             logger.info("All devices found.")
 
-        await asyncio.create_task(handle_set_params(mqtt_client, stop_event))
+        await asyncio.create_task(set_params(mqtt_client, stop_event))
 
         # Keep the main task alive
         try:

@@ -35,7 +35,7 @@ def async_safe_handle(func: Callable) -> Callable:
 
 
 @async_safe_handle
-async def handle_set_subscribe(device: Device, mqtt_client: Client, qos: int):
+async def subscribe(device: Device, mqtt_client: Client, qos: int):
     set_topic = device.set_topic
     await mqtt_client.subscribe(set_topic, qos=qos)
     device_registry.register(set_topic, device)
@@ -43,7 +43,7 @@ async def handle_set_subscribe(device: Device, mqtt_client: Client, qos: int):
 
 
 @async_safe_handle
-async def handle_set_params(mqtt_client: Client, stop_event: asyncio.Event):
+async def set_params(mqtt_client: Client, stop_event: asyncio.Event):
     async for message in mqtt_client.messages:
         if stop_event.is_set():
             break
@@ -60,7 +60,7 @@ async def handle_set_params(mqtt_client: Client, stop_event: asyncio.Event):
 
 
 @async_safe_handle
-async def handle_get_params(
+async def get_params(
     device: Device,
     mqtt_client: Client,
     stop_event: asyncio.Event,
