@@ -4,7 +4,7 @@ import time
 from GreeMQTT import logger
 from GreeMQTT.config import NETWORK
 from GreeMQTT.mqtt_client import create_mqtt_client
-from GreeMQTT.device import search_devices, ScanResult
+from GreeMQTT.device import Device
 from GreeMQTT.device_db import device_db
 from GreeMQTT.managers import DeviceRetryManager, start_device_threads
 
@@ -28,15 +28,18 @@ def main():
         # Try to use known device from DB
         for mac, (ip, key, is_gcm) in known_devices.items():
             if ip == device_ip:
-                device = ScanResult(
-                    (ip, 7000), mac, name="Load from DB", is_GCM=is_gcm == 1
+                device = Device(
+                    device_ip=ip,
+                    device_id=mac,
+                    name="Load from DB",
+                    is_GCM=is_gcm == 1,
+                    key=key,
                 )
-                device.key = key
                 logger.info(f"Loaded device from DB: {device}")
                 break
         # If not found in DB, search for the device
         if not device:
-            device = search_devices(device_ip)
+            device = Device.search_devices(device_ip)
             if device and device.key:
                 logger.info(f"Device found: {device}")
                 device_db.save_device(

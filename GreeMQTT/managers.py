@@ -5,7 +5,7 @@ from typing import Callable, Tuple
 from loguru import logger
 import paho.mqtt.client as mqtt
 
-from GreeMQTT.device import search_devices, ScanResult
+from GreeMQTT.device import Device
 from GreeMQTT.device_db import device_db
 
 from GreeMQTT.mqtt_handler import handle_get_params, handle_set_params
@@ -25,7 +25,7 @@ def run_thread(target: Callable, args: Tuple):
 
 
 def start_device_threads(
-    device: ScanResult,
+    device: Device,
     mqtt_client: mqtt.Client,
     stop_event: threading.Event,
 ) -> Tuple[threading.Thread, threading.Thread]:

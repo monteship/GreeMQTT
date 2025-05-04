@@ -34,7 +34,6 @@ COPY --from=builder /install /usr/local
 # Copy only necessary project files
 COPY GreeMQTT /app/GreeMQTT
 
-
 # Set environment variables for Python
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
