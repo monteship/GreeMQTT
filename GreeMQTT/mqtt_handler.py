@@ -1,8 +1,8 @@
 import asyncio
-from loguru import logger
 from functools import wraps
 import json
 
+from GreeMQTT import logger
 from GreeMQTT.config import UPDATE_INTERVAL
 from GreeMQTT.device import Device
 
