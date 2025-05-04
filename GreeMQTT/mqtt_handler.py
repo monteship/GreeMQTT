@@ -11,7 +11,25 @@ from GreeMQTT.device import Device
 
 from typing import Callable
 
-DEVICES = {}
+
+class DeviceRegistry:
+    """Manages device topic-to-instance mapping."""
+
+    def __init__(self):
+        self._devices = {}
+
+    def register(self, topic: str, device: Device):
+        self._devices[topic] = device
+
+    def get(self, topic: str):
+        return self._devices.get(topic)
+
+    def unregister(self, topic: str):
+        if topic in self._devices:
+            del self._devices[topic]
+
+
+device_registry = DeviceRegistry()
 
 
 def async_safe_handle(func: Callable) -> Callable:
@@ -19,7 +37,7 @@ def async_safe_handle(func: Callable) -> Callable:
 
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        stop_event = args[2] if len(args) > 2 else kwargs.get("stop_event")
+        stop_event = kwargs.get("stop_event") or (args[2] if len(args) > 2 else None)
         while not (stop_event and stop_event.is_set()):
             try:
                 return await func(*args, **kwargs)
@@ -36,28 +54,24 @@ def async_safe_handle(func: Callable) -> Callable:
 async def handle_set_subscribe(device: Device, mqtt_client: Client, qos: int):
     set_topic = device.set_topic
     await mqtt_client.subscribe(set_topic, qos=qos)
+    device_registry.register(set_topic, device)
     logger.info(f"Subscribed to topic {set_topic} with QoS {qos}")
-    DEVICES[set_topic] = device
 
 
 @async_safe_handle
 async def handle_set_params(mqtt_client: Client, stop_event: asyncio.Event):
-    messages = mqtt_client.messages
-    async for message in messages:
+    async for message in mqtt_client.messages:
         if stop_event.is_set():
             break
-        device = DEVICES.get(str(message.topic))
-        if device is None:
-            logger.warning(f"No device found for topic {message.topic}. Skipping message.")
-            continue
-        logger.info(f"Received message on topic {message.topic}: {message.payload}")
+        device = device_registry.get(str(message.topic))
+        if not device:
+            continue  # Skip unknown topics silently for performance
         try:
             params = json.loads(message.payload.decode("utf-8"))
             await device.set_params(params)
+            logger.info(f"Set params for {message.topic}")
         except json.JSONDecodeError:
-            logger.error(
-                f"Invalid JSON received on topic {message.topic}: {message.payload}"
-            )
+            logger.error(f"Invalid JSON on {message.topic}: {message.payload}")
 
 
 @async_safe_handle
@@ -74,11 +88,7 @@ async def handle_get_params(
     while not stop_event.is_set():
         params = await device.get_param()
         if params:
-            params_str = json.dumps(params)
+            params_str = json.dumps(params, separators=(",", ":"))
             await mqtt_client.publish(params_topic, params_str, qos=qos, retain=retain)
-            logger.info(
-                f"{params_topic}: {params_str.replace(' ', '')} (QoS {qos}, Retain {retain})"
-            )
-        else:
-            logger.error(f"Failed to get parameters from device {device.device_id}.")
+            logger.debug(f"{params_topic}: {params_str} (QoS {qos}, Retain {retain})")
         await asyncio.sleep(UPDATE_INTERVAL)
