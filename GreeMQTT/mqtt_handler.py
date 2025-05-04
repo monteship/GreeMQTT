@@ -37,7 +37,7 @@ def handle_set_params(
     device: Device,
     mqtt_client: mqtt.Client,
     stop_event: threading.Event,
-    qos,
+    qos: int,
 ):
     """
     Subscribe to the set topic and handle incoming messages to set parameters.
