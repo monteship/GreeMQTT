@@ -1,6 +1,5 @@
 import aiomqtt
 from aiomqtt import Will
-
 from GreeMQTT.config import (
     MQTT_BROKER,
     MQTT_TOPIC,
