@@ -23,5 +23,5 @@ async def create_mqtt_client() -> aiomqtt.Client:
         ),
         username=MQTT_USER,
         password=MQTT_PASSWORD,
-    ) as client:
-        return client
+    )
+    return client
