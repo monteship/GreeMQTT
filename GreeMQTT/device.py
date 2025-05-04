@@ -202,4 +202,4 @@ class Device:
             name=name,
             is_GCM=is_GCM,
         )
-        return device
+        return await device.bind()
