@@ -101,8 +101,8 @@ def handle_get_params(
         params = device.get_param()
         if params:
             params_str = json.dumps(params)
-            mqtt_client.publish(params_topic, params_str, qos=qos, retain=True)
-            logger.info(f"{params_topic}: {params_str.replace(' ', '')} (QoS {qos})")
+            mqtt_client.publish(params_topic, params_str, qos=qos, retain=retain)
+            logger.info(f"{params_topic}: {params_str.replace(' ', '')} (QoS {qos}, Retain {retain})")
         else:
             logger.error(f"Failed to get parameters from device {device.device_id}.")
         stop_event.wait(UPDATE_INTERVAL)
