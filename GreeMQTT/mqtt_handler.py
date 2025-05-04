@@ -47,6 +47,9 @@ async def handle_set_params(mqtt_client: Client, stop_event: asyncio.Event):
         if stop_event.is_set():
             break
         device = DEVICES.get(str(message.topic))
+        if device is None:
+            logger.warning(f"No device found for topic {message.topic}. Skipping message.")
+            continue
         logger.info(f"Received message on topic {message.topic}: {message.payload}")
         try:
             params = json.loads(message.payload.decode("utf-8"))
