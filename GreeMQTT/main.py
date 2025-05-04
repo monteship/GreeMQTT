@@ -5,7 +5,7 @@ from GreeMQTT import logger
 from GreeMQTT.config import NETWORK
 from GreeMQTT.mqtt_client import create_mqtt_client
 from GreeMQTT.device import search_devices, ScanResult
-from GreeMQTT.device_db import get_all_devices, save_device
+from GreeMQTT.device_db import device_db
 from GreeMQTT.managers import DeviceRetryManager, start_device_threads
 
 from typing import List
@@ -19,7 +19,7 @@ def main():
 
     # Load known devices from DB
     known_devices = {
-        mac: (ip, key, is_gcm) for mac, ip, key, is_gcm in get_all_devices()
+        mac: (ip, key, is_gcm) for mac, ip, key, is_gcm in device_db.get_all_devices()
     }
     missing_devices = []
 
@@ -39,7 +39,9 @@ def main():
             device = search_devices(device_ip)
             if device and device.key:
                 logger.info(f"Device found: {device}")
-                save_device(device.device_id, device.ip, device.key, device.is_GCM)
+                device_db.save_device(
+                    device.device_id, device.ip, device.key, device.is_GCM
+                )
             else:
                 logger.warning(f"Device not found: {device_ip}")
                 missing_devices.append(device_ip)
