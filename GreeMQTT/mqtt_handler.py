@@ -52,6 +52,7 @@ def handle_set_params(
             - 1: At least once.
             - 2: Exactly once.
     """
+
     def on_message(client, userdata, msg):
         logger.info(f"Received message on topic {msg.topic}: {msg.payload}")
         try:
@@ -82,14 +83,25 @@ def handle_get_params(
     stop_event: threading.Event,
     qos: int = 0,
 ):
-    """Periodically fetch and publish device parameters."""
+    """
+    Periodically fetch and publish device parameters.
+    Args:
+        device (Device): The device instance to get parameters from.
+        mqtt_client (mqtt.Client): The MQTT client used for communication.
+        stop_event (threading.Event): Event to signal when to stop the handler.
+        qos (int, optional): Quality of Service level for MQTT message delivery.
+            Valid values are:
+            - 0: At most once (default).
+            - 1: At least once.
+            - 2: Exactly once.
+    """
     params_topic = device.topic
     logger.info(f"Publishing device parameters to topic {params_topic}.")
     while not stop_event.is_set():
         params = device.get_param()
         if params:
             params_str = json.dumps(params)
-            mqtt_client.publish(params_topic, params_str, qos=qos)
+            mqtt_client.publish(params_topic, params_str, qos=qos, retain=True)
             logger.info(f"{params_topic}: {params_str.replace(' ', '')} (QoS {qos})")
         else:
             logger.error(f"Failed to get parameters from device {device.device_id}.")
