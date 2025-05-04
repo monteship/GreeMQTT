@@ -35,9 +35,15 @@ COPY --from=builder /install /usr/local
 COPY GreeMQTT /app/GreeMQTT
 
 # Set environment variables for Python
+#ENV PYTHONUNBUFFERED=1 \
+#    PYTHONDONTWRITEBYTECODE=1 \
+#    LOGURU_LEVEL=INFO
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    LOGURU_LEVEL=INFO
+    LOGURU_LEVEL=INFO \
+    NETWORK="192.168.1.40,192.168.1.41" \
+    MQTT_BROKER="192.168.1.10"
 
 # Use non-root user
 USER appuser
