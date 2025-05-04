@@ -1,6 +1,5 @@
 # Stage 1: Build
 FROM python:3.13-slim AS builder
-LABEL authors="monteship"
 
 WORKDIR /app
 
@@ -33,7 +32,7 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 
 # Copy only necessary project files
-COPY config.py device.py device_db.py encryptor.py main.py managers.py mqtt_handler.py utils.py README.md /app/
+COPY GreeMQTT /app/GreeMQTT
 
 
 # Set environment variables for Python
@@ -46,5 +45,4 @@ USER appuser
 
 EXPOSE 1883
 
-CMD ["python", "main.py"]
-
+CMD ["python", "-m", "GreeMQTT"]

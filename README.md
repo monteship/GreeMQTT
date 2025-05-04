@@ -22,7 +22,7 @@ cd GreeMQTT
 ```
 ### 2. Install Dependencies
 ```bash
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 ### 3. Configure Environment Variables
 Create a `.env` file in the root directory and set the following variables:
@@ -39,7 +39,7 @@ UPDATE_INTERVAL=5
 
 ### 4. Run the Application
 ```bash
-python main.py
+python -m GreeMQTT
 ```
 
 ## Docker Deployment 

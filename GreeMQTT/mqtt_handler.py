@@ -6,8 +6,8 @@ from functools import wraps
 import json
 import time
 
-from config import MQTT_TOPIC, UPDATE_INTERVAL
-from device import ScanResult, set_params, get_param
+from GreeMQTT.config import MQTT_TOPIC, UPDATE_INTERVAL
+from GreeMQTT.device import ScanResult, set_params, get_param
 
 import paho.mqtt.client as mqtt
 

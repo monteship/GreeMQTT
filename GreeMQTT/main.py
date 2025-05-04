@@ -1,30 +1,19 @@
 import threading
 import time
 
-import paho.mqtt.client as mqtt
-from loguru import logger
-
-from config import MQTT_BROKER, MQTT_PASSWORD, MQTT_PORT, MQTT_USER, NETWORK
-from device import search_devices
-from device_db import init_db, get_all_devices, save_device
-from device import ScanResult
-from managers import DeviceRetryManager, start_device_threads
+from GreeMQTT import logger
+from GreeMQTT.config import NETWORK
+from GreeMQTT.mqtt_client import create_mqtt_client
+from GreeMQTT.device import search_devices, ScanResult
+from GreeMQTT.device_db import get_all_devices, save_device
+from GreeMQTT.managers import DeviceRetryManager, start_device_threads
 
 from typing import List
 
-# Initialize MQTT client
-mqtt_client = mqtt.Client(
-    callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-    client_id="gree_mqtt_client",
-)
-if MQTT_USER and MQTT_PASSWORD:
-    mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
-mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-mqtt_client.loop_start()
+mqtt_client = create_mqtt_client()
 
 
-if __name__ == "__main__":
-    init_db()
+def main():
     threads: List[threading.Thread,] = []
     stop_event = threading.Event()
 
@@ -60,9 +49,7 @@ if __name__ == "__main__":
 
     # Start retry thread
     if missing_devices:
-        retry_manager = DeviceRetryManager(
-            missing_devices, mqtt_client, stop_event
-        )
+        retry_manager = DeviceRetryManager(missing_devices, mqtt_client, stop_event)
         retry_manager.start()
         # ...
         retry_manager.join()
