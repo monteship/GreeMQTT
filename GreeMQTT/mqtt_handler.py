@@ -83,6 +83,7 @@ async def handle_set_params(mqtt_client: Client, stop_event: asyncio.Event):
             break
         device = device_registry.get(str(message.topic))
         if not device:
+            logger.debug(f"Unknown topic received: {message.topic}")
             continue  # Skip unknown topics silently for performance
         try:
             params = json.loads(message.payload.decode("utf-8"))
