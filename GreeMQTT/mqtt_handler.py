@@ -6,8 +6,8 @@ from functools import wraps
 import json
 import time
 
-from config import MQTT_TOPIC, UPDATE_INTERVAL
-from device import ScanResult, set_params, get_param
+from GreeMQTT.config import UPDATE_INTERVAL
+from GreeMQTT.device import Device
 
 import paho.mqtt.client as mqtt
 
@@ -34,7 +34,7 @@ def safe_handle(func: Callable) -> Callable:
 
 @safe_handle
 def handle_set_params(
-    device: ScanResult,
+    device: Device,
     mqtt_client: mqtt.Client,
     stop_event: threading.Event,
 ):
@@ -44,11 +44,12 @@ def handle_set_params(
         logger.info(f"Received message on topic {msg.topic}: {msg.payload}")
         try:
             params = json.loads(msg.payload.decode("utf-8"))
-            set_params(device, params)
+            device.set_params(params)
         except json.JSONDecodeError:
             logger.error(f"Invalid JSON received on topic {msg.topic}: {msg.payload}")
 
-    set_topic = f"{MQTT_TOPIC}/{device.device_id}/set"
+    set_topic = f"{device.topic}/set"
+
     result, mid = mqtt_client.subscribe(set_topic)
     if result == 0:
         logger.info(f"Successfully subscribed to topic {set_topic}")
@@ -64,15 +65,15 @@ def handle_set_params(
 
 @safe_handle
 def handle_get_params(
-    device: ScanResult,
+    device: Device,
     mqtt_client: mqtt.Client,
     stop_event: threading.Event,
 ):
     """Periodically fetch and publish device parameters."""
-    params_topic = f"{MQTT_TOPIC}/{device.device_id}"
+    params_topic = device.topic
     logger.info(f"Publishing device parameters to topic {params_topic}.")
     while not stop_event.is_set():
-        params = get_param(device)
+        params = device.get_param()
         if params:
             params_str = json.dumps(params)
             mqtt_client.publish(params_topic, params_str)

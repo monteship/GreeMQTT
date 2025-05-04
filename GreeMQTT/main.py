@@ -1,36 +1,25 @@
 import threading
 import time
 
-import paho.mqtt.client as mqtt
-from loguru import logger
-
-from config import MQTT_BROKER, MQTT_PASSWORD, MQTT_PORT, MQTT_USER, NETWORK
-from device import search_devices
-from device_db import init_db, get_all_devices, save_device
-from device import ScanResult
-from managers import DeviceRetryManager, start_device_threads
+from GreeMQTT import logger
+from GreeMQTT.config import NETWORK
+from GreeMQTT.mqtt_client import create_mqtt_client
+from GreeMQTT.device import Device
+from GreeMQTT.device_db import device_db
+from GreeMQTT.managers import DeviceRetryManager, start_device_threads
 
 from typing import List
 
-# Initialize MQTT client
-mqtt_client = mqtt.Client(
-    callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-    client_id="gree_mqtt_client",
-)
-if MQTT_USER and MQTT_PASSWORD:
-    mqtt_client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
-mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
-mqtt_client.loop_start()
+mqtt_client = create_mqtt_client()
 
 
-if __name__ == "__main__":
-    init_db()
+def main():
     threads: List[threading.Thread,] = []
     stop_event = threading.Event()
 
     # Load known devices from DB
     known_devices = {
-        mac: (ip, key, is_gcm) for mac, ip, key, is_gcm in get_all_devices()
+        mac: (ip, key, is_gcm) for mac, ip, key, is_gcm in device_db.get_all_devices()
     }
     missing_devices = []
 
@@ -39,18 +28,23 @@ if __name__ == "__main__":
         # Try to use known device from DB
         for mac, (ip, key, is_gcm) in known_devices.items():
             if ip == device_ip:
-                device = ScanResult(
-                    (ip, 7000), mac, name="Load from DB", is_GCM=is_gcm == 1
+                device = Device(
+                    device_ip=ip,
+                    device_id=mac,
+                    name="Load from DB",
+                    is_GCM=is_gcm == 1,
+                    key=key,
                 )
-                device.key = key
                 logger.info(f"Loaded device from DB: {device}")
                 break
         # If not found in DB, search for the device
         if not device:
-            device = search_devices(device_ip)
+            device = Device.search_devices(device_ip)
             if device and device.key:
                 logger.info(f"Device found: {device}")
-                save_device(device.device_id, device.ip, device.key, device.is_GCM)
+                device_db.save_device(
+                    device.device_id, device.ip, device.key, device.is_GCM
+                )
             else:
                 logger.warning(f"Device not found: {device_ip}")
                 missing_devices.append(device_ip)
@@ -60,9 +54,7 @@ if __name__ == "__main__":
 
     # Start retry thread
     if missing_devices:
-        retry_manager = DeviceRetryManager(
-            missing_devices, mqtt_client, stop_event
-        )
+        retry_manager = DeviceRetryManager(missing_devices, mqtt_client, stop_event)
         retry_manager.start()
         # ...
         retry_manager.join()

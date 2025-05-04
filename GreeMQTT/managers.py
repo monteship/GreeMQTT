@@ -5,10 +5,10 @@ from typing import Callable, Tuple
 from loguru import logger
 import paho.mqtt.client as mqtt
 
-from device import search_devices, ScanResult
-from device_db import save_device
+from GreeMQTT.device import Device
+from GreeMQTT.device_db import device_db
 
-from mqtt_handler import handle_get_params, handle_set_params
+from GreeMQTT.mqtt_handler import handle_get_params, handle_set_params
 
 
 def run_thread(target: Callable, args: Tuple):
@@ -25,7 +25,7 @@ def run_thread(target: Callable, args: Tuple):
 
 
 def start_device_threads(
-    device: ScanResult,
+    device: Device,
     mqtt_client: mqtt.Client,
     stop_event: threading.Event,
 ) -> Tuple[threading.Thread, threading.Thread]:
@@ -61,7 +61,9 @@ class DeviceRetryManager:
                 device = search_devices(device_ip)
                 if device and device.key:
                     logger.info(f"Device found on retry: {device}")
-                    save_device(device.device_id, device.ip, device.key, device.is_GCM)
+                    device_db.save_device(
+                        device.device_id, device.ip, device.key, device.is_GCM
+                    )
                     self.threads.extend(
                         start_device_threads(device, self.mqtt_client, self.stop_event)
                     )
