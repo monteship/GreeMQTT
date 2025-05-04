@@ -1,7 +1,6 @@
 import asyncio
 
-from loguru import logger
-
+from GreeMQTT import logger
 from GreeMQTT.config import MQTT_QOS, MQTT_RETAIN
 from GreeMQTT.device import Device
 from GreeMQTT.device_db import device_db

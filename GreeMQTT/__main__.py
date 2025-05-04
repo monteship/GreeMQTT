@@ -1,5 +1,4 @@
-from loguru import logger
-
+from GreeMQTT import logger
 from GreeMQTT.main import main
 import asyncio
 

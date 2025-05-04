@@ -2,7 +2,7 @@ import os
 
 from typing import Optional, List, Union
 from dotenv import load_dotenv
-from loguru import logger
+from GreeMQTT import logger
 
 # Load environment variables
 load_dotenv()

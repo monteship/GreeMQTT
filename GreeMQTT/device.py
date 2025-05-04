@@ -2,9 +2,8 @@ import json
 import asyncio
 from typing import Optional, Dict
 
-from loguru import logger
-
-from GreeMQTT.config import TRACKING_PARAMS
+from GreeMQTT import logger
+from GreeMQTT.config import TRACKING_PARAMS, MQTT_TOPIC
 from GreeMQTT.encryptor import encrypt, decrypt
 from GreeMQTT.utils import params_convert
 
@@ -31,7 +30,7 @@ class Device:
 
     @property
     def topic(self) -> str:
-        return f"device/{self.device_id}"
+        return f"{MQTT_TOPIC}/{self.device_id}"
 
     def __str__(self):
         return f"Device(ip={self.ip}, device_id={self.device_id}, GCM={self.is_GCM})"
