@@ -4,7 +4,7 @@ from GreeMQTT import logger
 from GreeMQTT.config import MQTT_QOS, MQTT_RETAIN
 from GreeMQTT.device import Device
 from GreeMQTT.device_db import device_db
-from GreeMQTT.mqtt_handler import handle_get_params, handle_set_params
+from GreeMQTT.mqtt_handler import handle_get_params, handle_set_subscribe
 
 
 async def start_device_tasks(
@@ -19,13 +19,10 @@ async def start_device_tasks(
     :param stop_event:
     :return:
     """
-    get_task = asyncio.create_task(
+    asyncio.create_task(
         handle_get_params(device, mqtt_client, stop_event, MQTT_QOS, MQTT_RETAIN)
     )
-    set_task = asyncio.create_task(
-        handle_set_params(device, mqtt_client, stop_event, MQTT_QOS)
-    )
-    return [get_task, set_task]
+    asyncio.create_task(handle_set_subscribe(device, mqtt_client, MQTT_QOS))
 
 
 class DeviceRetryManager:
@@ -33,7 +30,6 @@ class DeviceRetryManager:
         self.missing_devices = missing_devices
         self.mqtt_client = mqtt_client
         self.stop_event = stop_event
-        self.tasks = []
 
     async def run(self):
         while not self.stop_event.is_set():
@@ -42,12 +38,12 @@ class DeviceRetryManager:
                 if device and device.key:
                     logger.info(f"Device found on retry: {device}")
                     device_db.save_device(
-                        device.device_id, device.ip, device.key, device.is_GCM
+                        device.device_id, device.device_ip, device.key, device.is_GCM
                     )
-                    self.tasks.extend(
-                        await start_device_tasks(
-                            device, self.mqtt_client, self.stop_event
-                        )
-                    )
+                    await start_device_tasks(device, self.mqtt_client, self.stop_event)
                     self.missing_devices.remove(device_ip)
+            if not self.missing_devices:
+                logger.info("All devices found.")
+                break
+            logger.info(f"Retrying to find devices: {self.missing_devices}")
             await asyncio.sleep(300)  # 5 minutes

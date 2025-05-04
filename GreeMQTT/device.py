@@ -22,7 +22,7 @@ class Device:
         is_GCM: bool = False,
         key: Optional[str] = None,
     ):
-        self.ip = device_ip
+        self.device_ip = device_ip
         self.device_id = device_id
         self.name = name
         self.is_GCM = is_GCM
@@ -32,8 +32,12 @@ class Device:
     def topic(self) -> str:
         return f"{MQTT_TOPIC}/{self.device_id}"
 
+    @property
+    def set_topic(self) -> str:
+        return f"{self.topic}/set"
+
     def __str__(self):
-        return f"Device(ip={self.ip}, device_id={self.device_id}, GCM={self.is_GCM})"
+        return f"Device(ip={self.device_ip}, device_id={self.device_id}, GCM={self.is_GCM})"
 
     def encrypt_request(self, pack: str) -> str:
         request = {"cid": "app", "i": 0, "t": "pack", "uid": 0, "tcid": self.device_id}
@@ -71,8 +75,8 @@ class Device:
                 self.transport.close()
 
         transport, protocol = await loop.create_datagram_endpoint(
-            lambda: UDPClientProtocol(self.ip),
-            remote_addr=(self.ip, UDP_PORT),
+            lambda: UDPClientProtocol(self.device_ip),
+            remote_addr=(self.device_ip, UDP_PORT),
         )
         try:
             await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)
