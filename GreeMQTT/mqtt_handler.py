@@ -82,7 +82,7 @@ def handle_get_params(
     mqtt_client: mqtt.Client,
     stop_event: threading.Event,
     qos: int,
-    retain: bool = False,
+    retain: bool,
 ):
     """
     Periodically fetch and publish device parameters.
@@ -95,7 +95,7 @@ def handle_get_params(
             - 0: At most once (default).
             - 1: At least once.
             - 2: Exactly once.
-        retain (bool, optional): Whether to retain the message on the broker.
+        retain (bool): Whether to retain the message on the broker.
             Defaults to False.
     """
     params_topic = device.topic
