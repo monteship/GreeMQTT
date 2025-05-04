@@ -1,6 +1,5 @@
 import json
-import re
-import socket
+import asyncio
 from typing import Optional, Dict
 
 from loguru import logger
@@ -49,21 +48,48 @@ class Device:
             return pack_decrypted
         return dict(zip(pack_decrypted["cols"], pack_decrypted["dat"]))
 
-    def _send_data(self, request: bytes) -> Optional[bytes]:
-        with socket.socket(type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP) as s:
-            s.settimeout(SOCKET_TIMEOUT)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.sendto(request, (self.ip, UDP_PORT))
-            return s.recv(BUFFER_SIZE)
+    async def _send_data(self, request: bytes) -> Optional[bytes]:
+        loop = asyncio.get_running_loop()
+        on_con_lost = loop.create_future()
+        response_data = bytearray()
 
-    def bind(self) -> Optional["Device"]:
+        class UDPClientProtocol(asyncio.DatagramProtocol):
+            def __init__(self, ip):
+                self.transport = None
+                self.ip = ip
+
+            def connection_made(self, transport):
+                self.transport = transport
+                self.transport.sendto(request, (self.ip, UDP_PORT))
+
+            def datagram_received(self, data, addr):
+                response_data.extend(data)
+                on_con_lost.set_result(True)
+                self.transport.close()
+
+            def error_received(self, exc):
+                on_con_lost.set_result(False)
+                self.transport.close()
+
+        transport, protocol = await loop.create_datagram_endpoint(
+            lambda: UDPClientProtocol(self.ip),
+            remote_addr=(self.ip, UDP_PORT),
+        )
+        try:
+            await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)
+        except asyncio.TimeoutError:
+            transport.close()
+            return None
+        return bytes(response_data) if response_data else None
+
+    async def bind(self) -> Optional["Device"]:
         logger.info(f"Binding device: {self})")
         request = self._bind_request(1)
-        result = self._send_data(request)
+        result = await self._send_data(request)
         if not result:
             if not self.is_GCM:
                 self.is_GCM = True
-                return self.bind()
+                return await self.bind()
             return None
         response = json.loads(result)
         if response["t"] == "pack":
@@ -88,9 +114,9 @@ class Device:
         request.update(pack_encrypted)
         return json.dumps(request).encode()
 
-    def get_param(self) -> Optional[Dict]:
+    async def get_param(self) -> Optional[Dict]:
         request = self.encrypt_request(self._status_request_pack())
-        result = self._send_data(request.encode())
+        result = await self._send_data(request.encode())
         if not result:
             logger.error(f"Failed to get parameters from device {self.device_id}")
             return None
@@ -100,12 +126,12 @@ class Device:
             return params_convert(params)
         return {}
 
-    def set_params(self, params: dict) -> None:
+    async def set_params(self, params: dict) -> None:
         params = params_convert(params, back=True)
         opts, ps = zip(*[(f'"{k}"', f"{v}") for k, v in params.items()])
         pack = f'{{"opt":[{",".join(opts)}],"p":[{",".join(ps)}],"t":"cmd"}}'
         request = self.encrypt_request(pack)
-        result = self._send_data(request.encode())
+        result = await self._send_data(request.encode())
         if result:
             response = json.loads(result)
             if response["t"] == "pack":
@@ -121,35 +147,59 @@ class Device:
         return f'{{"cols":[{cols}],"mac":"{self.device_id}","t":"status"}}'
 
     @classmethod
-    def search_devices(cls, ip_address=None) -> Optional["Device"]:
+    async def search_devices(cls, ip_address=None) -> Optional["Device"]:
         logger.info(f"Searching for devices using broadcast address: {ip_address}")
-        with socket.socket(type=socket.SOCK_DGRAM, proto=socket.IPPROTO_UDP) as s:
-            s.settimeout(5)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            s.sendto(b'{"t":"scan"}', (ip_address, UDP_PORT))
-            try:
-                data, (ip, port) = s.recvfrom(1024)
-                raw_json = data[: data.rfind(b"}") + 1]
-                response = json.loads(raw_json)
-                is_GCM = "tag" in response
-                decrypted_response = decrypt(response, is_GCM=is_GCM)
-                name = decrypted_response.get("name", "Unknown")
-                cid = decrypted_response.get("cid", response.get("cid"))
-                if not is_GCM and "ver" in decrypted_response:
-                    ver = re.search(r"(?<=V)[0-9]+(?<=.)", decrypted_response["ver"])
-                    if ver and int(ver.group(0)) >= 2:
-                        logger.info(
-                            "Set GCM encryption because version in search responce is 2 or later"
-                        )
-                        is_GCM = True
-                device = cls(
-                    device_ip=ip,
-                    device_id=cid,
-                    name=name,
-                    is_GCM=is_GCM,
+        loop = asyncio.get_running_loop()
+        on_con_lost = loop.create_future()
+        response_data = bytearray()
+
+        class UDPBroadcastProtocol(asyncio.DatagramProtocol):
+            def __init__(self):
+                self.transport = None
+
+            def connection_made(self, transport):
+                self.transport = transport
+                self.transport.sendto(b'{"t":"scan"}', (ip_address, UDP_PORT))
+
+            def datagram_received(self, data, addr):
+                response_data.extend(data)
+                on_con_lost.set_result(True)
+                self.transport.close()
+
+            def error_received(self, exc):
+                on_con_lost.set_result(False)
+                self.transport.close()
+
+        transport, protocol = await loop.create_datagram_endpoint(
+            lambda: UDPBroadcastProtocol(),
+            remote_addr=(ip_address, UDP_PORT),
+        )
+        try:
+            await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)
+        except asyncio.TimeoutError:
+            transport.close()
+            return None
+        if not response_data:
+            return None
+        raw_json = response_data[: response_data.rfind(b"}") + 1]
+        response = json.loads(raw_json)
+        is_GCM = "tag" in response
+        decrypted_response = decrypt(response, is_GCM=is_GCM)
+        name = decrypted_response.get("name", "Unknown")
+        cid = decrypted_response.get("cid", response.get("cid"))
+        if not is_GCM and "ver" in decrypted_response:
+            import re
+
+            ver = re.search(r"(?<=V)[0-9]+(?<=.)", decrypted_response["ver"])
+            if ver and int(ver.group(0)) >= 2:
+                logger.info(
+                    "Set GCM encryption because version in search responce is 2 or later"
                 )
-                return device.bind()
-            except socket.timeout:
-                logger.info("No response from device")
-        return None
+                is_GCM = True
+        device = cls(
+            device_ip=ip_address,
+            device_id=cid,
+            name=name,
+            is_GCM=is_GCM,
+        )
+        return await device.bind()
