@@ -34,6 +34,7 @@ if MQTT_QOS not in [0, 1, 2]:
     raise ValueError(
         "MQTT_QOS environment variable must be 0, 1, or 2. Please set it to a valid QoS level."
     )
+MQTT_RETAIN: bool = os.getenv("MQTT_RETAIN", "false").lower() == "true"
 
 # Set update interval
 UPDATE_INTERVAL: int = int(os.getenv("UPDATE_INTERVAL", 4))

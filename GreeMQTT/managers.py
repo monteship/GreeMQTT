@@ -5,6 +5,7 @@ from typing import Callable, Tuple
 from loguru import logger
 import paho.mqtt.client as mqtt
 
+from GreeMQTT.config import MQTT_QOS, MQTT_RETAIN
 from GreeMQTT.device import Device
 from GreeMQTT.device_db import device_db
 
@@ -36,8 +37,12 @@ def start_device_threads(
     :param stop_event:
     :return:
     """
-    get_thread = run_thread(handle_get_params, (device, mqtt_client, stop_event))
-    set_thread = run_thread(handle_set_params, (device, mqtt_client, stop_event))
+    get_thread = run_thread(
+        handle_get_params, (device, mqtt_client, stop_event, MQTT_QOS, MQTT_RETAIN)
+    )
+    set_thread = run_thread(
+        handle_set_params, (device, mqtt_client, stop_event, MQTT_QOS)
+    )
     return get_thread, set_thread
 
 
@@ -58,7 +63,7 @@ class DeviceRetryManager:
     def _retry_loop(self):
         while not self.stop_event.is_set():
             for device_ip in list(self.missing_devices):
-                device = search_devices(device_ip)
+                device = Device.search_devices(device_ip)
                 if device and device.key:
                     logger.info(f"Device found on retry: {device}")
                     device_db.save_device(
