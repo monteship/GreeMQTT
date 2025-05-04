@@ -12,7 +12,7 @@ from GreeMQTT.config import (
 
 
 async def create_mqtt_client() -> aiomqtt.Client:
-    async with aiomqtt.Client(
+    client = aiomqtt.Client(
         hostname=MQTT_BROKER,
         port=MQTT_PORT,
         will=Will(
