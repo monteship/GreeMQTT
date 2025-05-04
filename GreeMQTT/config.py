@@ -25,6 +25,11 @@ MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USER: Optional[str] = os.getenv("MQTT_USER")
 MQTT_PASSWORD: Optional[str] = os.getenv("MQTT_PASSWORD")
 MQTT_TOPIC: str = os.getenv("MQTT_TOPIC", "gree")
+MQTT_QOS: int = int(os.getenv("MQTT_QOS", 0))
+if MQTT_QOS not in [0, 1, 2]:
+    raise ValueError(
+        "MQTT_QOS environment variable must be 0, 1, or 2. Please set it to a valid QoS level."
+    )
 
 # Set update interval
 UPDATE_INTERVAL: int = int(os.getenv("UPDATE_INTERVAL", 4))
