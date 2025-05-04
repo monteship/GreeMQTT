@@ -39,8 +39,19 @@ def handle_set_params(
     stop_event: threading.Event,
     qos: int = 0,
 ):
-    """Subscribe to the set topic and handle incoming messages to set parameters."""
+    """
+    Subscribe to the set topic and handle incoming messages to set parameters.
 
+    Args:
+        device (Device): The device instance to set parameters for.
+        mqtt_client (mqtt.Client): The MQTT client used for communication.
+        stop_event (threading.Event): Event to signal when to stop the handler.
+        qos (int, optional): Quality of Service level for MQTT message delivery.
+            Valid values are:
+            - 0: At most once (default).
+            - 1: At least once.
+            - 2: Exactly once.
+    """
     def on_message(client, userdata, msg):
         logger.info(f"Received message on topic {msg.topic}: {msg.payload}")
         try:

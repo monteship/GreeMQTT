@@ -25,6 +25,10 @@ MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USER: Optional[str] = os.getenv("MQTT_USER")
 MQTT_PASSWORD: Optional[str] = os.getenv("MQTT_PASSWORD")
 MQTT_TOPIC: str = os.getenv("MQTT_TOPIC", "gree")
+# MQTT Quality of Service (QoS) levels:
+# 0 = At most once (no acknowledgment, may be lost),
+# 1 = At least once (guaranteed delivery, possible duplicates),
+# 2 = Exactly once (guaranteed delivery, no duplicates).
 MQTT_QOS: int = int(os.getenv("MQTT_QOS", 0))
 if MQTT_QOS not in [0, 1, 2]:
     raise ValueError(
