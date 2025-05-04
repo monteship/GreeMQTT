@@ -37,7 +37,7 @@ def handle_set_params(
     device: Device,
     mqtt_client: mqtt.Client,
     stop_event: threading.Event,
-    qos: int = 0,
+    qos: int,
 ):
     """
     Subscribe to the set topic and handle incoming messages to set parameters.
@@ -46,12 +46,13 @@ def handle_set_params(
         device (Device): The device instance to set parameters for.
         mqtt_client (mqtt.Client): The MQTT client used for communication.
         stop_event (threading.Event): Event to signal when to stop the handler.
-        qos (int, optional): Quality of Service level for MQTT message delivery.
+        qos (int): Quality of Service level for MQTT message delivery.
             Valid values are:
             - 0: At most once (default).
             - 1: At least once.
             - 2: Exactly once.
     """
+
     def on_message(client, userdata, msg):
         logger.info(f"Received message on topic {msg.topic}: {msg.payload}")
         try:
@@ -80,17 +81,33 @@ def handle_get_params(
     device: Device,
     mqtt_client: mqtt.Client,
     stop_event: threading.Event,
-    qos: int = 0,
+    qos: int,
+    retain: bool,
 ):
-    """Periodically fetch and publish device parameters."""
+    """
+    Periodically fetch and publish device parameters.
+    Args:
+        device (Device): The device instance to get parameters from.
+        mqtt_client (mqtt.Client): The MQTT client used for communication.
+        stop_event (threading.Event): Event to signal when to stop the handler.
+        qos (int): Quality of Service level for MQTT message delivery.
+            Valid values are:
+            - 0: At most once (default).
+            - 1: At least once.
+            - 2: Exactly once.
+        retain (bool): Whether to retain the message on the broker.
+            Defaults to False.
+    """
     params_topic = device.topic
     logger.info(f"Publishing device parameters to topic {params_topic}.")
     while not stop_event.is_set():
         params = device.get_param()
         if params:
             params_str = json.dumps(params)
-            mqtt_client.publish(params_topic, params_str, qos=qos)
-            logger.info(f"{params_topic}: {params_str.replace(' ', '')} (QoS {qos})")
+            mqtt_client.publish(params_topic, params_str, qos=qos, retain=retain)
+            logger.info(
+                f"{params_topic}: {params_str.replace(' ', '')} (QoS {qos}, Retain {retain})"
+            )
         else:
             logger.error(f"Failed to get parameters from device {device.device_id}.")
         stop_event.wait(UPDATE_INTERVAL)
