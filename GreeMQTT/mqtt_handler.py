@@ -81,7 +81,7 @@ def handle_get_params(
     device: Device,
     mqtt_client: mqtt.Client,
     stop_event: threading.Event,
-    qos,
+    qos: int,
     retain: bool = False,
 ):
     """
