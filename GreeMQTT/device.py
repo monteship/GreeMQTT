@@ -16,7 +16,7 @@ UDP_PORT = 7000
 class Device:
     def __init__(
         self,
-        device_ip: int,
+        device_ip: str,
         device_id: str,
         name: str,
         is_GCM: bool = False,

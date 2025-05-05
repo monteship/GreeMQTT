@@ -4,7 +4,7 @@ from GreeMQTT import logger
 from GreeMQTT.config import MQTT_QOS, MQTT_RETAIN
 from GreeMQTT.device import Device
 from GreeMQTT.device_db import device_db
-from GreeMQTT.mqtt_handler import handle_get_params, handle_set_subscribe
+from GreeMQTT.mqtt_handler import get_params, subscribe
 
 
 async def start_device_tasks(
@@ -20,9 +20,9 @@ async def start_device_tasks(
     :return:
     """
     asyncio.create_task(
-        handle_get_params(device, mqtt_client, stop_event, MQTT_QOS, MQTT_RETAIN)
+        get_params(device, mqtt_client, stop_event, MQTT_QOS, MQTT_RETAIN)
     )
-    asyncio.create_task(handle_set_subscribe(device, mqtt_client, MQTT_QOS))
+    asyncio.create_task(subscribe(device, mqtt_client, MQTT_QOS))
 
 
 class DeviceRetryManager:
