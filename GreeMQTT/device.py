@@ -1,8 +1,9 @@
+import datetime
 import json
 import asyncio
-from typing import Optional, Dict
+from typing import Optional, Dict, Self
 
-from GreeMQTT import logger
+from GreeMQTT.logger import log
 from GreeMQTT.config import TRACKING_PARAMS, MQTT_TOPIC
 from GreeMQTT.encryptor import encrypt, decrypt
 from GreeMQTT.utils import params_convert
@@ -37,7 +38,7 @@ class Device:
         return f"{self.topic}/set"
 
     def __str__(self):
-        return f"Device(ip={self.device_ip}, device_id={self.device_id}, GCM={self.is_GCM})"
+        return f"Device(device_ip={self.device_ip}, device_id={self.device_id}, is_GCM={self.is_GCM})"
 
     def encrypt_request(self, pack: str) -> str:
         request = {"cid": "app", "i": 0, "t": "pack", "uid": 0, "tcid": self.device_id}
@@ -85,8 +86,8 @@ class Device:
             return None
         return bytes(response_data) if response_data else None
 
-    async def bind(self) -> Optional["Device"]:
-        logger.info(f"Binding device: {self})")
+    async def bind(self) -> Optional[Self]:
+        log.info("Binding to device", device=self.device_id)
         request = self._bind_request(1)
         result = await self._send_data(request)
         if not result:
@@ -102,18 +103,16 @@ class Device:
                 and decrypted_response["t"].lower() == "bindok"
             ):
                 key = decrypted_response["key"]
-                logger.info("Bind to %s succeeded: %s" % (self.device_id, key))
+                log.info("Bind succeeded", device_id=self.device_id, key=key)
                 self.key = key
                 return self
             return None
         return None
 
     def _bind_request(self, i=0) -> bytes:
+        pack = f'{{"mac":"{self.device_id}","t":"bind","uid":0}}'
+        pack_encrypted = encrypt(pack, is_GCM=self.is_GCM)
         request = {"cid": "app", "i": i, "t": "pack", "uid": 0, "tcid": self.device_id}
-        pack_encrypted = encrypt(
-            f'{{"mac":"{self.device_id}","t":"bind","uid":0}}',
-            is_GCM=self.is_GCM,
-        )
         request.update(pack_encrypted)
         return json.dumps(request).encode()
 
@@ -121,7 +120,7 @@ class Device:
         request = self.encrypt_request(self._status_request_pack())
         result = await self._send_data(request.encode())
         if not result:
-            logger.error(f"Failed to get parameters from device {self.device_id}")
+            log.error("Failed to get parameters from device", device_id=self.device_id)
             return None
         response = json.loads(result)
         if response["t"] == "pack":
@@ -129,7 +128,7 @@ class Device:
             return params_convert(params)
         return {}
 
-    async def set_params(self, params: dict) -> None:
+    async def set_params(self, params: dict) -> dict[str, str | int] | None:
         params = params_convert(params, back=True)
         opts, ps = zip(*[(f'"{k}"', f"{v}") for k, v in params.items()])
         pack = f'{{"opt":[{",".join(opts)}],"p":[{",".join(ps)}],"t":"cmd"}}'
@@ -138,12 +137,26 @@ class Device:
         if result:
             response = json.loads(result)
             if response["t"] == "pack":
-                decrypt_response = self.decrypt_response(response)
-                opt = decrypt_response.get("opt")
-                val = decrypt_response.get("val")
-                logger.debug(
-                    f"Set parameters for device {self.device_id}: {opt} = {val}"
-                )
+                return self.decrypt_response(response)
+            return None
+        return None
+
+    async def synchronize_time(self) -> None:
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        response = await self.set_params({"time": current_time})
+        if response is not None:
+            log.info(
+                "Synchronized time with device",
+                device_id=self.device_id,
+                opt=response.get("opt"),
+                p=response.get("p"),
+                val=response.get("val"),
+                r=response.get("r"),
+            )
+        else:
+            log.error(
+                "Failed to synchronize time with device", device_id=self.device_id
+            )
 
     def _status_request_pack(self) -> str:
         cols = ",".join(f'"{i}"' for i in TRACKING_PARAMS)
@@ -151,7 +164,7 @@ class Device:
 
     @classmethod
     async def search_devices(cls, ip_address=None) -> Optional["Device"]:
-        logger.info(f"Searching for devices using broadcast address: {ip_address}")
+        log.info("Searching for devices using broadcast address", ip_address=ip_address)
         loop = asyncio.get_running_loop()
         on_con_lost = loop.create_future()
         response_data = bytearray()
@@ -195,7 +208,7 @@ class Device:
 
             ver = re.search(r"(?<=V)[0-9]+(?<=.)", decrypted_response["ver"])
             if ver and int(ver.group(0)) >= 2:
-                logger.info(
+                log.info(
                     "Set GCM encryption because version in search responce is 2 or later"
                 )
                 is_GCM = True
