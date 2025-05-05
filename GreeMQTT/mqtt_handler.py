@@ -57,7 +57,6 @@ def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
                     )
                     await asyncio.sleep(current_delay)
                     current_delay *= backoff
-            return None
 
         return wrapper
 
