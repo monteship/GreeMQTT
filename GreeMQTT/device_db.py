@@ -64,12 +64,18 @@ class DeviceDB:
             for row in rows
         ]
 
-    def save_device(self, mac: str, ip: str, key: str, is_gcm: bool = False):
+    def save_device(
+        self,
+        device_id: str,
+        device_ip: str,
+        key: str,
+        is_gcm: bool = False,
+    ):
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         c.execute(
             "REPLACE INTO devices (device_id, device_ip, `key`, is_gcm) VALUES (?, ?, ?, ?)",
-            (mac, ip, key, int(is_gcm)),
+            (device_id, device_ip, key, int(is_gcm)),
         )
         conn.commit()
         conn.close()
