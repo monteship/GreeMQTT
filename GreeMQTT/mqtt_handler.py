@@ -34,7 +34,38 @@ def async_safe_handle(func: Callable) -> Callable:
     return wrapper
 
 
+def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
+    """Decorator to add retry logic with exponential backoff to async functions."""
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            attempt = 0
+            current_delay = delay
+            while attempt < retries:
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    attempt += 1
+                    if attempt >= retries:
+                        logger.error(
+                            f"{func.__name__} failed after {retries} attempts: {e}"
+                        )
+                        raise
+                    logger.warning(
+                        f"Retrying {func.__name__} in {current_delay} seconds (attempt {attempt}/{retries})..."
+                    )
+                    await asyncio.sleep(current_delay)
+                    current_delay *= backoff
+            return None
+
+        return wrapper
+
+    return decorator
+
+
 @async_safe_handle
+@with_retries()
 async def subscribe(device: Device, mqtt_client: Client, qos: int):
     set_topic = device.set_topic
     await mqtt_client.subscribe(set_topic, qos=qos)
@@ -43,6 +74,7 @@ async def subscribe(device: Device, mqtt_client: Client, qos: int):
 
 
 @async_safe_handle
+@with_retries()
 async def set_params(mqtt_client: Client, stop_event: asyncio.Event):
     async for message in mqtt_client.messages:
         if stop_event.is_set():
@@ -60,6 +92,7 @@ async def set_params(mqtt_client: Client, stop_event: asyncio.Event):
 
 
 @async_safe_handle
+@with_retries()
 async def get_params(
     device: Device,
     mqtt_client: Client,
