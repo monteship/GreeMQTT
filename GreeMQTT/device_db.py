@@ -30,7 +30,8 @@ class DeviceDB:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         c.execute(
-            "SELECT mac, device_ip, `key`, is_gcm FROM devices WHERE mac = ?", (mac,)
+            "SELECT device_id, device_ip, `key`, is_gcm FROM devices WHERE mac = ?",
+            (mac,),
         )
         row = c.fetchone()
         conn.close()
