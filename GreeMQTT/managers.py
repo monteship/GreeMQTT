@@ -38,7 +38,7 @@ class DeviceRetryManager:
 
     async def run(self):
         while not self.stop_event.is_set():
-            for device_ip in self.missing_devices:
+            for device_ip in self.missing_devices.copy():
                 device = await Device.search_devices(device_ip)
                 if device and device.key:
                     log.info("New device found", device=str(device))
