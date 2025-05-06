@@ -130,7 +130,7 @@ class Device:
         return DeviceCommandBuilder.status(self.device_id)
 
     @classmethod
-    async def search_devices(cls, ip_address=None) -> Optional["Device"]:
+    async def search_devices(cls, ip_address=None) -> Optional[Self]:
         log.info("Searching for devices using broadcast address", ip_address=ip_address)
         result = await DeviceCommunicator.broadcast_scan(ip_address)
         if not result:

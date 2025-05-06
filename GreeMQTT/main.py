@@ -2,11 +2,11 @@ import asyncio
 
 from typing import List
 
+from GreeMQTT import device_db
 from GreeMQTT.logger import log
 from GreeMQTT.config import NETWORK
 from GreeMQTT.mqtt_client import create_mqtt_client
 from GreeMQTT.device.device import Device
-from GreeMQTT.device_db import device_db
 from GreeMQTT.managers import DeviceRetryManager, start_device_tasks
 from GreeMQTT.mqtt_handler import set_params
 
@@ -14,6 +14,7 @@ log.info("GreeMQTT package initialized")
 
 
 async def main():
+    # Create a stop event to signal tasks to stop
     stop_event = asyncio.Event()
 
     # Load known devices from DB

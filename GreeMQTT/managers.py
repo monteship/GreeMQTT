@@ -5,7 +5,7 @@ from aiomqtt import Client
 from GreeMQTT.logger import log
 from GreeMQTT.config import MQTT_QOS, MQTT_RETAIN
 from GreeMQTT.device.device import Device
-from GreeMQTT.device_db import device_db
+from GreeMQTT import device_db
 from GreeMQTT.mqtt_handler import get_params, subscribe
 
 
