@@ -51,7 +51,6 @@ class Device:
         return dict(zip(pack_decrypted["cols"], pack_decrypted["dat"]))
 
     async def _send_data(self, request: bytes) -> Optional[bytes]:
-        # Now uses DeviceCommunicator
         return await self.communicator.send_data(request)
 
     async def bind(self) -> Optional[Self]:
