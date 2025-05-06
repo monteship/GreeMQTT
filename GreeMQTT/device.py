@@ -4,7 +4,7 @@ from typing import Optional, Dict, Self
 
 from GreeMQTT.logger import log
 from GreeMQTT.config import TRACKING_PARAMS, MQTT_TOPIC
-from GreeMQTT.encryptor import encrypt, decrypt
+from GreeMQTT.device_encryption import DeviceEncryptor
 from GreeMQTT.utils import params_convert
 from GreeMQTT.device_communication import DeviceCommunicator
 
@@ -29,6 +29,7 @@ class Device:
         self.is_GCM = is_GCM
         self.key = key
         self.communicator = DeviceCommunicator(device_ip)
+        self.encryptor = DeviceEncryptor(key, is_GCM)
 
     @property
     def topic(self) -> str:
@@ -43,12 +44,12 @@ class Device:
 
     def encrypt_request(self, pack: str) -> str:
         request = {"cid": "app", "i": 0, "t": "pack", "uid": 0, "tcid": self.device_id}
-        data_encrypted = encrypt(pack, self.key, self.is_GCM)
+        data_encrypted = self.encryptor.encrypt(pack)
         request.update(data_encrypted)
         return json.dumps(request)
 
     def decrypt_response(self, response: dict) -> Dict[str, str | int]:
-        pack_decrypted = decrypt(response, self.key, self.is_GCM)
+        pack_decrypted = self.encryptor.decrypt(response)
         if "cols" not in pack_decrypted:
             return pack_decrypted
         return dict(zip(pack_decrypted["cols"], pack_decrypted["dat"]))
@@ -64,11 +65,12 @@ class Device:
         if not result:
             if not self.is_GCM:
                 self.is_GCM = True
+                self.encryptor.update_gcm(True)
                 return await self.bind()
             return None
         response = json.loads(result)
         if response["t"] == "pack":
-            decrypted_response = decrypt(response, is_GCM=self.is_GCM)
+            decrypted_response = self.encryptor.decrypt(response)
             if (
                 "t" in decrypted_response
                 and decrypted_response["t"].lower() == "bindok"
@@ -76,13 +78,14 @@ class Device:
                 key = decrypted_response["key"]
                 log.info("Bind succeeded", device_id=self.device_id, key=key)
                 self.key = key
+                self.encryptor.update_key(key)
                 return self
             return None
         return None
 
     def _bind_request(self, i=0) -> bytes:
         pack = f'{{"mac":"{self.device_id}","t":"bind","uid":0}}'
-        pack_encrypted = encrypt(pack, is_GCM=self.is_GCM)
+        pack_encrypted = self.encryptor.encrypt(pack)
         request = {"cid": "app", "i": i, "t": "pack", "uid": 0, "tcid": self.device_id}
         request.update(pack_encrypted)
         return json.dumps(request).encode()
@@ -142,7 +145,8 @@ class Device:
         raw_json = result[: result.rfind(b"}") + 1]
         response = json.loads(raw_json)
         is_GCM = "tag" in response
-        decrypted_response = decrypt(response, is_GCM=is_GCM)
+        encryptor = DeviceEncryptor(is_GCM=is_GCM)
+        decrypted_response = encryptor.decrypt(response)
         name = decrypted_response.get("name", "Unknown")
         cid = decrypted_response.get("cid", response.get("cid"))
         if not is_GCM and "ver" in decrypted_response:
