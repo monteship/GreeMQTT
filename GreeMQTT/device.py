@@ -3,15 +3,11 @@ import json
 from typing import Optional, Dict, Self
 
 from GreeMQTT.logger import log
-from GreeMQTT.config import TRACKING_PARAMS, MQTT_TOPIC
+from GreeMQTT.config import MQTT_TOPIC
 from GreeMQTT.device_encryption import DeviceEncryptor
 from GreeMQTT.device_param_converter import DeviceParamConverter
 from GreeMQTT.device_communication import DeviceCommunicator
-
-# Constants
-SOCKET_TIMEOUT = 5
-BUFFER_SIZE = 1024
-UDP_PORT = 7000
+from GreeMQTT.device_command_builder import DeviceCommandBuilder
 
 
 class Device:
@@ -84,14 +80,14 @@ class Device:
         return None
 
     def _bind_request(self, i=0) -> bytes:
-        pack = f'{{"mac":"{self.device_id}","t":"bind","uid":0}}'
+        pack = DeviceCommandBuilder.bind(self.device_id)
         pack_encrypted = self.encryptor.encrypt(pack)
         request = {"cid": "app", "i": i, "t": "pack", "uid": 0, "tcid": self.device_id}
         request.update(pack_encrypted)
         return json.dumps(request).encode()
 
     async def get_param(self) -> Optional[Dict]:
-        request = self.encrypt_request(self._status_request_pack())
+        request = self.encrypt_request(DeviceCommandBuilder.status(self.device_id))
         result = await self._send_data(request.encode())
         if not result:
             log.error("Failed to get parameters from device", device_id=self.device_id)
@@ -104,8 +100,7 @@ class Device:
 
     async def set_params(self, params: dict) -> dict[str, str | int] | None:
         params = DeviceParamConverter.to_device(params)
-        opts, ps = zip(*[(f'"{k}"', f"{v}") for k, v in params.items()])
-        pack = f'{{"opt":[{",".join(opts)}],"p":[{",".join(ps)}],"t":"cmd"}}'
+        pack = DeviceCommandBuilder.set_params(params)
         request = self.encrypt_request(pack)
         result = await self._send_data(request.encode())
         if result:
@@ -133,8 +128,7 @@ class Device:
             )
 
     def _status_request_pack(self) -> str:
-        cols = ",".join(f'"{i}"' for i in TRACKING_PARAMS)
-        return f'{{"cols":[{cols}],"mac":"{self.device_id}","t":"status"}}'
+        return DeviceCommandBuilder.status(self.device_id)
 
     @classmethod
     async def search_devices(cls, ip_address=None) -> Optional["Device"]:
