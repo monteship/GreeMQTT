@@ -5,7 +5,8 @@ from GreeMQTT.config import TRACKING_PARAMS
 class DeviceCommandBuilder:
     @staticmethod
     def bind(device_id: str) -> str:
-        return json.dumps({"mac": device_id, "t": "bind", "uid": 0})
+        data = {"mac": device_id, "t": "bind", "uid": 0}
+        return json.dumps(data)
 
     @staticmethod
     def status(device_id: str) -> str:
@@ -17,6 +18,6 @@ class DeviceCommandBuilder:
         data = {
             "opt": list(params.keys()),
             "p": list(params.values()),
-            "t": "cmd"
+            "t": "cmd",
         }
         return json.dumps(data)

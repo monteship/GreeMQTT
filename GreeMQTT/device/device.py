@@ -53,29 +53,34 @@ class Device:
     async def _send_data(self, request: bytes) -> Optional[bytes]:
         return await self.communicator.send_data(request)
 
-    async def bind(self) -> Optional[Self]:
+    async def bind(self, max_retries: int = 2) -> Optional[Self]:
         log.info("Binding to device", device=self.device_id)
-        request = self._bind_request(1)
-        result = await self._send_data(request)
-        if not result:
-            if not self.is_GCM:
-                self.is_GCM = True
-                self.encryptor.update_gcm(True)
-                return await self.bind()
+        retries = 0
+        while retries < max_retries:
+            request = self._bind_request(1)
+            result = await self._send_data(request)
+            if not result:
+                if not self.is_GCM:
+                    self.is_GCM = True
+                    self.encryptor.update_gcm(True)
+                    retries += 1
+                    continue
+                return None
+            response = json.loads(result)
+            if response["t"] == "pack":
+                decrypted_response = self.encryptor.decrypt(response)
+                if (
+                    "t" in decrypted_response
+                    and decrypted_response["t"].lower() == "bindok"
+                ):
+                    key = decrypted_response["key"]
+                    log.info("Bind succeeded", device_id=self.device_id, key=key)
+                    self.key = key
+                    self.encryptor.update_key(key)
+                    return self
+                return None
             return None
-        response = json.loads(result)
-        if response["t"] == "pack":
-            decrypted_response = self.encryptor.decrypt(response)
-            if (
-                "t" in decrypted_response
-                and decrypted_response["t"].lower() == "bindok"
-            ):
-                key = decrypted_response["key"]
-                log.info("Bind succeeded", device_id=self.device_id, key=key)
-                self.key = key
-                self.encryptor.update_key(key)
-                return self
-            return None
+        log.error("Bind failed after maximum retries", device_id=self.device_id)
         return None
 
     def _bind_request(self, i=0) -> bytes:
