@@ -7,7 +7,7 @@ from aiomqtt import Client
 
 from GreeMQTT.logger import log
 from GreeMQTT.config import UPDATE_INTERVAL
-from GreeMQTT.device import Device
+from GreeMQTT.device.device import Device
 
 from typing import Callable
 

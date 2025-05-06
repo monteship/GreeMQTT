@@ -2,7 +2,7 @@ import sqlite3
 import os
 from typing import Optional, List
 
-from GreeMQTT.device import Device
+from GreeMQTT.device.device import Device
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "devices.db")
 

@@ -5,7 +5,7 @@ from typing import List
 from GreeMQTT.logger import log
 from GreeMQTT.config import NETWORK
 from GreeMQTT.mqtt_client import create_mqtt_client
-from GreeMQTT.device import Device
+from GreeMQTT.device.device import Device
 from GreeMQTT.device_db import device_db
 from GreeMQTT.managers import DeviceRetryManager, start_device_tasks
 from GreeMQTT.mqtt_handler import set_params
