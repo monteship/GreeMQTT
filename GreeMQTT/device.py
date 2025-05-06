@@ -1,12 +1,12 @@
 import datetime
 import json
-import asyncio
 from typing import Optional, Dict, Self
 
 from GreeMQTT.logger import log
 from GreeMQTT.config import TRACKING_PARAMS, MQTT_TOPIC
 from GreeMQTT.encryptor import encrypt, decrypt
 from GreeMQTT.utils import params_convert
+from GreeMQTT.device_communication import DeviceCommunicator
 
 # Constants
 SOCKET_TIMEOUT = 5
@@ -28,6 +28,7 @@ class Device:
         self.name = name
         self.is_GCM = is_GCM
         self.key = key
+        self.communicator = DeviceCommunicator(device_ip)
 
     @property
     def topic(self) -> str:
@@ -53,38 +54,8 @@ class Device:
         return dict(zip(pack_decrypted["cols"], pack_decrypted["dat"]))
 
     async def _send_data(self, request: bytes) -> Optional[bytes]:
-        loop = asyncio.get_running_loop()
-        on_con_lost = loop.create_future()
-        response_data = bytearray()
-
-        class UDPClientProtocol(asyncio.DatagramProtocol):
-            def __init__(self, ip):
-                self.transport = None
-                self.ip = ip
-
-            def connection_made(self, transport):
-                self.transport = transport
-                self.transport.sendto(request, (self.ip, UDP_PORT))
-
-            def datagram_received(self, data, addr):
-                response_data.extend(data)
-                on_con_lost.set_result(True)
-                self.transport.close()
-
-            def error_received(self, exc):
-                on_con_lost.set_result(False)
-                self.transport.close()
-
-        transport, protocol = await loop.create_datagram_endpoint(
-            lambda: UDPClientProtocol(self.device_ip),
-            remote_addr=(self.device_ip, UDP_PORT),
-        )
-        try:
-            await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)
-        except asyncio.TimeoutError:
-            transport.close()
-            return None
-        return bytes(response_data) if response_data else None
+        # Now uses DeviceCommunicator
+        return await self.communicator.send_data(request)
 
     async def bind(self) -> Optional[Self]:
         log.info("Binding to device", device=self.device_id)
@@ -165,39 +136,10 @@ class Device:
     @classmethod
     async def search_devices(cls, ip_address=None) -> Optional["Device"]:
         log.info("Searching for devices using broadcast address", ip_address=ip_address)
-        loop = asyncio.get_running_loop()
-        on_con_lost = loop.create_future()
-        response_data = bytearray()
-
-        class UDPBroadcastProtocol(asyncio.DatagramProtocol):
-            def __init__(self):
-                self.transport = None
-
-            def connection_made(self, transport):
-                self.transport = transport
-                self.transport.sendto(b'{"t":"scan"}', (ip_address, UDP_PORT))
-
-            def datagram_received(self, data, addr):
-                response_data.extend(data)
-                on_con_lost.set_result(True)
-                self.transport.close()
-
-            def error_received(self, exc):
-                on_con_lost.set_result(False)
-                self.transport.close()
-
-        transport, protocol = await loop.create_datagram_endpoint(
-            lambda: UDPBroadcastProtocol(),
-            remote_addr=(ip_address, UDP_PORT),
-        )
-        try:
-            await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)
-        except asyncio.TimeoutError:
-            transport.close()
+        result = await DeviceCommunicator.broadcast_scan(ip_address)
+        if not result:
             return None
-        if not response_data:
-            return None
-        raw_json = response_data[: response_data.rfind(b"}") + 1]
+        raw_json = result[: result.rfind(b"}") + 1]
         response = json.loads(raw_json)
         is_GCM = "tag" in response
         decrypted_response = decrypt(response, is_GCM=is_GCM)
