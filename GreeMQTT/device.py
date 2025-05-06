@@ -5,7 +5,7 @@ from typing import Optional, Dict, Self
 from GreeMQTT.logger import log
 from GreeMQTT.config import TRACKING_PARAMS, MQTT_TOPIC
 from GreeMQTT.device_encryption import DeviceEncryptor
-from GreeMQTT.utils import params_convert
+from GreeMQTT.device_param_converter import DeviceParamConverter
 from GreeMQTT.device_communication import DeviceCommunicator
 
 # Constants
@@ -99,11 +99,11 @@ class Device:
         response = json.loads(result)
         if response["t"] == "pack":
             params = self.decrypt_response(response)
-            return params_convert(params)
+            return DeviceParamConverter.from_device(params)
         return {}
 
     async def set_params(self, params: dict) -> dict[str, str | int] | None:
-        params = params_convert(params, back=True)
+        params = DeviceParamConverter.to_device(params)
         opts, ps = zip(*[(f'"{k}"', f"{v}") for k, v in params.items()])
         pack = f'{{"opt":[{",".join(opts)}],"p":[{",".join(ps)}],"t":"cmd"}}'
         request = self.encrypt_request(pack)
