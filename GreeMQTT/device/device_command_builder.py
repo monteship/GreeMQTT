@@ -14,5 +14,9 @@ class DeviceCommandBuilder:
 
     @staticmethod
     def set_params(params: dict) -> str:
-        opts, ps = zip(*[(f'"{k}"', str(v)) for k, v in params.items()])
-        return f'{{"opt":[{",".join(opts)}],"p":[{",".join(ps)}],"t":"cmd"}}'
+        data = {
+            "opt": list(params.keys()),
+            "p": list(params.values()),
+            "t": "cmd"
+        }
+        return json.dumps(data)
