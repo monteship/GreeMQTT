@@ -5,13 +5,13 @@ import traceback
 
 from aiomqtt import Client
 
+from GreeMQTT.device.device_registry import DeviceRegistry
 from GreeMQTT.logger import log
 from GreeMQTT.config import UPDATE_INTERVAL, MQTT_QOS, MQTT_RETAIN
 from GreeMQTT.device.device import Device
 
 from typing import Callable
 
-from GreeMQTT.utils import DeviceRegistry
 
 device_registry = DeviceRegistry()
 
