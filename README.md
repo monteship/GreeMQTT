@@ -49,22 +49,36 @@ python -m GreeMQTT
 ```bash
 docker build -t greemqtt .
 ```
+
 ### 2. Run the Docker Container
 ```bash
-docker run -it \
-  --network="host" \
-  -e MQTT_BROKER='your_mqtt_broker' \
-  -e MQTT_PORT='your_mqtt_port' \
-  -e MQTT_USER='your_mqtt_user' \
-  -e MQTT_PASSWORD='your_mqtt_password' \
-  -e MQTT_TOPIC='your_mqtt_topic' \
-  -e NETWORK='device_ip1,device_ip2' \
-  -e UPDATE_INTERVAL=5 \
-  --name greemqtt \
-  monteship/greemqtt:latest
+docker run --env-file .env --network host --name greemqtt greemqtt
+```
+- `--env-file .env`: Loads environment variables from your `.env` file.
+- `--network host`: Required for device discovery on your local network.
+
+## Configuration Example
+
+Example `.env` file:
+```env
+NETWORK=192.168.1.100,192.168.1.101
+MQTT_BROKER=192.168.1.10
+MQTT_PORT=1883
+MQTT_USER=homeassistant
+MQTT_PASSWORD=yourpassword
+MQTT_TOPIC=gree
+UPDATE_INTERVAL=5
 ```
 
+- `NETWORK`: Comma-separated list of Gree device IPs or leave empty for auto-discovery.
+- `MQTT_BROKER`: Address of your MQTT broker.
+- `MQTT_PORT`: MQTT broker port (default: 1883).
+- `MQTT_USER`/`MQTT_PASSWORD`: MQTT credentials.
+- `MQTT_TOPIC`: Base topic for publishing and subscribing.
+- `UPDATE_INTERVAL`: Polling interval in seconds.
+
 ## Usage
+
 ### 1. Device Discovery
 The application will automatically discover devices on the specified network. You can specify the network in the `.env` file or as an environment variable.
 
@@ -80,8 +94,8 @@ The application periodically retrieves and publishes device parameters to the sp
 MQTT_TOPIC/deviceId/set {"Pow":1,"SetTem":24}
 ```
 
-## Home Assistant Integration
-Integrate with Home Assistant using the MQTT integration. Example configuration for `configuration.yaml`:
+### Home Assistant Integration
+Add the following to your Home Assistant `configuration.yaml` to subscribe to GreeMQTT topics:
 ```yaml
 - unique_id: "kitchen_ac"
   name: "Kitchen Gree AC"
@@ -156,10 +170,17 @@ Integrate with Home Assistant using the MQTT integration. Example configuration 
 - Verify MQTT broker settings and connectivity.
 - Check logs for error messages.
 - For issues, open an issue on the GitHub repository.
+- Ensure your devices and the host/container are on the same network segment.
+- Use `--network host` with Docker for proper device discovery.
+- Check logs for errors: `docker logs greemqtt` or console output.
 
 ## Contributing
 Contributions are welcome! Please open an issue or submit a pull request for suggestions or improvements.
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
+
+## Support
+For questions or issues, open an issue on [GitHub](https://github.com/monteship/GreeMQTT/issues).
 
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
+`
