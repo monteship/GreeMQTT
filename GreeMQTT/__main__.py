@@ -1,12 +1,12 @@
 import asyncio
 from typing import List
 from GreeMQTT import device_db
+from GreeMQTT.device.device_retry_manager import DeviceRetryManager
 from GreeMQTT.logger import log
 from GreeMQTT.config import NETWORK
 from GreeMQTT.mqtt_client import create_mqtt_client
 from GreeMQTT.device.device import Device
-from GreeMQTT.managers import DeviceRetryManager, start_device_tasks
-from GreeMQTT.mqtt_handler import set_params
+from GreeMQTT.mqtt_handler import set_params, start_device_tasks
 
 log.info("GreeMQTT package initialized")
 
