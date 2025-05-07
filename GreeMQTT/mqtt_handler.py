@@ -5,15 +5,35 @@ import traceback
 
 from aiomqtt import Client
 
+from GreeMQTT.device.device_registry import DeviceRegistry
 from GreeMQTT.logger import log
-from GreeMQTT.config import UPDATE_INTERVAL
+from GreeMQTT.config import UPDATE_INTERVAL, MQTT_QOS, MQTT_RETAIN
 from GreeMQTT.device.device import Device
 
 from typing import Callable
 
-from GreeMQTT.utils import DeviceRegistry
 
 device_registry = DeviceRegistry()
+
+
+async def start_device_tasks(
+    device: Device,
+    mqtt_client,
+    stop_event: asyncio.Event,
+):
+    """
+    Start async tasks for handling device parameters.
+    :param device:
+    :param mqtt_client:
+    :param stop_event:
+    :return:
+    """
+    asyncio.create_task(device.synchronize_time())
+    asyncio.create_task(
+        get_params(device, mqtt_client, stop_event, MQTT_QOS, MQTT_RETAIN)
+    )
+    asyncio.create_task(subscribe(device, mqtt_client, MQTT_QOS))
+    log.info("Started tasks for device", device=str(device))
 
 
 def async_safe_handle(func: Callable) -> Callable:
