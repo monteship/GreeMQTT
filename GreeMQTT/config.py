@@ -10,6 +10,16 @@ load_dotenv()
 
 
 def get_env_list(var_name: str, default: str = None) -> List[str]:
+    """
+    Retrieves a list of values from an environment variable.
+
+    Args:
+        var_name (str): The name of the environment variable.
+        default (str, optional): A default comma-separated string to use if the environment variable is not set. Defaults to None.
+
+    Returns:
+        List[str]: A list of non-empty, stripped values. Returns an empty list if the environment variable is unset or empty.
+    """
     value = os.getenv(var_name, default)
     if value is None or value.strip() == "":
         return []
