@@ -94,6 +94,9 @@ The application periodically retrieves and publishes device parameters to the sp
 MQTT_TOPIC/deviceId/set {"Pow":1,"SetTem":24}
 ```
 
+## Automatic Device Discovery
+If the `NETWORK` environment variable is not set, GreeMQTT will automatically scan your local network for compatible Gree devices on port 7000. This makes setup easier, as you do not need to manually specify device IP addresses. The discovered devices will be added to the internal database and managed automatically.
+
 ### Home Assistant Integration
 Add the following to your Home Assistant `configuration.yaml` to subscribe to GreeMQTT topics:
 ```yaml
