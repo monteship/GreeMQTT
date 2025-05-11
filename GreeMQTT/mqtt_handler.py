@@ -1,17 +1,15 @@
 import asyncio
-from functools import wraps
 import json
 import traceback
+from functools import wraps
+from typing import Callable
 
 from aiomqtt import Client
 
+from GreeMQTT.config import MQTT_QOS, MQTT_RETAIN, UPDATE_INTERVAL
+from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_registry import DeviceRegistry
 from GreeMQTT.logger import log
-from GreeMQTT.config import UPDATE_INTERVAL, MQTT_QOS, MQTT_RETAIN
-from GreeMQTT.device.device import Device
-
-from typing import Callable
-
 
 device_registry = DeviceRegistry()
 

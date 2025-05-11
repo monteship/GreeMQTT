@@ -1,14 +1,47 @@
 import asyncio
+import ipaddress
+import os
 from typing import List
+
+from tqdm.asyncio import tqdm_asyncio
+
 from GreeMQTT import device_db
+from GreeMQTT.config import NETWORK
+from GreeMQTT.device.device import Device
+from GreeMQTT.device.device_communication import DeviceCommunicator
 from GreeMQTT.device.device_retry_manager import DeviceRetryManager
 from GreeMQTT.logger import log
-from GreeMQTT.config import NETWORK
 from GreeMQTT.mqtt_client import create_mqtt_client
-from GreeMQTT.device.device import Device
 from GreeMQTT.mqtt_handler import set_params, start_device_tasks
 
 log.info("GreeMQTT package initialized")
+
+
+async def scan_port_7000_on_subnet(subnet=None):
+    if subnet is None:
+        subnet = os.environ.get("SUBNET", "192.168.1.0/24")
+    open_ips = []
+    sem = asyncio.Semaphore(100)
+    log.info("Scanning subnet", subnet=subnet)
+
+    async def check_ip(ip):
+        async with sem:
+            try:
+                response = await DeviceCommunicator.broadcast_scan(str(ip))
+                if response:
+                    open_ips.append(str(ip))
+            except Exception as e:
+                log.error("Error scanning IP", ip=str(ip), error=str(e))
+                pass
+
+    ip_list = [
+        ip
+        for ip in ipaddress.IPv4Network(subnet)
+        if not (str(ip).endswith(".0") or str(ip).endswith(".255"))
+    ]
+    tasks = [asyncio.create_task(check_ip(ip)) for ip in ip_list]
+    await tqdm_asyncio.gather(*tasks, desc="Scanning IPs", total=len(ip_list))
+    return open_ips
 
 
 class GreeMQTTApp:
@@ -18,15 +51,23 @@ class GreeMQTTApp:
         self.missing_devices: List[str] = []
         self.mqtt_client = None
         self.retry_manager = None
+        self.network = NETWORK.copy()  # Use a local copy
+
+    async def load_network(self):
+        if not self.network:
+            log.info("NETWORK not provided, scanning for devices on port 7000...")
+            self.network = await scan_port_7000_on_subnet()
+            log.info("Discovered devices:", network=self.network)
 
     async def load_devices(self):
+        await self.load_network()
         self.known_devices = device_db.get_all_devices()
         known_ips = [device.device_ip for device in self.known_devices]
-        self.missing_devices = [ip for ip in NETWORK if ip not in known_ips]
+        self.missing_devices = [ip for ip in self.network if ip not in known_ips]
 
     async def start_known_devices(self):
         for device in self.known_devices:
-            if device.device_ip not in NETWORK:
+            if device.device_ip not in self.network:
                 log.info("Device not in network, skipping", device=str(device))
                 continue
             await start_device_tasks(device, self.mqtt_client, self.stop_event)

@@ -2,9 +2,9 @@ import asyncio
 
 from aiomqtt import Client
 
-from GreeMQTT.logger import log
-from GreeMQTT.device.device import Device
 from GreeMQTT import device_db
+from GreeMQTT.device.device import Device
+from GreeMQTT.logger import log
 from GreeMQTT.mqtt_handler import start_device_tasks
 
 

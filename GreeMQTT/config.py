@@ -1,6 +1,8 @@
 import os
 from typing import List
+
 from dotenv import load_dotenv
+
 from GreeMQTT.logger import log
 
 # Load environment variables from .env file
@@ -9,8 +11,8 @@ load_dotenv()
 
 def get_env_list(var_name: str, default: str = None) -> List[str]:
     value = os.getenv(var_name, default)
-    if value is None:
-        raise ValueError(f"{var_name} environment variable is not set.")
+    if value is None or value.strip() == "":
+        return []
     return [item.strip() for item in value.split(",") if item.strip()]
 
 

@@ -1,5 +1,6 @@
-from typing import Optional, Dict
-from GreeMQTT.encryptor import encrypt, decrypt
+from typing import Dict, Optional
+
+from GreeMQTT.encryptor import decrypt, encrypt
 
 
 class DeviceEncryptor:
