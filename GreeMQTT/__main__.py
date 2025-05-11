@@ -1,7 +1,6 @@
 import asyncio
 import ipaddress
 import os
-from typing import List
 
 from tqdm.asyncio import tqdm_asyncio
 
@@ -47,40 +46,40 @@ async def scan_port_7000_on_subnet(subnet=None):
 class GreeMQTTApp:
     def __init__(self):
         self.stop_event = asyncio.Event()
-        self.known_devices: List[Device] = []
-        self.missing_devices: List[str] = []
+        self.known_devices = []
+        self.missing_devices = []
         self.mqtt_client = None
         self.retry_manager = None
-        self.network = NETWORK.copy()  # Use a local copy
+        self.network = NETWORK.copy()
 
-    async def load_network(self):
+    async def scan_network(self):
         if not self.network:
             log.info("NETWORK not provided, scanning for devices on port 7000...")
             self.network = await scan_port_7000_on_subnet()
             log.info("Discovered devices:", network=self.network)
 
     async def load_devices(self):
-        await self.load_network()
+        await self.scan_network()
         self.known_devices = device_db.get_all_devices()
-        known_ips = [device.device_ip for device in self.known_devices]
+        known_ips = [d.device_ip for d in self.known_devices]
         self.missing_devices = [ip for ip in self.network if ip not in known_ips]
 
-    async def start_known_devices(self):
+    async def start_devices(self):
         for device in self.known_devices:
-            if device.device_ip not in self.network:
+            if self.network and device.device_ip not in self.network:
                 log.info("Device not in network, skipping", device=str(device))
                 continue
             await start_device_tasks(device, self.mqtt_client, self.stop_event)
 
-    async def search_and_add_missing_devices(self):
-        for device_ip in self.missing_devices[:]:
-            device = await Device.search_devices(device_ip)
+    async def add_missing_devices(self):
+        for ip in self.missing_devices[:]:
+            device = await Device.search_devices(ip)
             if device and device.key:
                 log.info("New device found", device=str(device))
                 device_db.save_device(
                     device.device_id, device.device_ip, device.key, device.is_GCM
                 )
-                self.missing_devices.remove(device_ip)
+                self.missing_devices.remove(ip)
                 await start_device_tasks(device, self.mqtt_client, self.stop_event)
 
     async def start_retry_manager(self):
@@ -100,8 +99,8 @@ class GreeMQTTApp:
         await self.load_devices()
         async with await create_mqtt_client() as mqtt_client:
             self.mqtt_client = mqtt_client
-            await self.start_known_devices()
-            await self.search_and_add_missing_devices()
+            await self.start_devices()
+            await self.add_missing_devices()
             await self.start_retry_manager()
             await asyncio.create_task(set_params(self.mqtt_client, self.stop_event))
             try:
