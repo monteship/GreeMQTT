@@ -1,6 +1,7 @@
 import asyncio
 import ipaddress
 import os
+from typing import List
 
 from tqdm.asyncio import tqdm_asyncio
 
@@ -16,9 +17,8 @@ from GreeMQTT.mqtt_handler import set_params, start_device_tasks
 log.info("GreeMQTT package initialized")
 
 
-async def scan_port_7000_on_subnet(subnet=None):
-    if subnet is None:
-        subnet = os.environ.get("SUBNET", "192.168.1.0/24")
+async def scan_port_7000_on_subnet():
+    subnet = os.environ.get("SUBNET", "192.168.1.0/24")
     open_ips = []
     sem = asyncio.Semaphore(100)
     log.info("Scanning subnet", subnet=subnet)
@@ -46,20 +46,20 @@ async def scan_port_7000_on_subnet(subnet=None):
 class GreeMQTTApp:
     def __init__(self):
         self.stop_event = asyncio.Event()
-        self.known_devices = []
-        self.missing_devices = []
+        self.known_devices: List[Device] = []
+        self.missing_devices: List[str] = []
         self.mqtt_client = None
         self.retry_manager = None
         self.network = NETWORK.copy()
 
     async def scan_network(self):
-        if not self.network:
-            log.info("NETWORK not provided, scanning for devices on port 7000...")
-            self.network = await scan_port_7000_on_subnet()
-            log.info("Discovered devices:", network=self.network)
+        log.info("NETWORK not provided, scanning for devices on port 7000...")
+        self.network = await scan_port_7000_on_subnet()
+        log.info("Discovered devices:", network=self.network)
 
     async def load_devices(self):
-        await self.scan_network()
+        if not self.network:
+            await self.scan_network()
         self.known_devices = device_db.get_all_devices()
         known_ips = [d.device_ip for d in self.known_devices]
         self.missing_devices = [ip for ip in self.network if ip not in known_ips]
@@ -96,9 +96,9 @@ class GreeMQTTApp:
             log.info("All devices found, no retry needed.")
 
     async def run(self):
-        await self.load_devices()
         async with await create_mqtt_client() as mqtt_client:
             self.mqtt_client = mqtt_client
+            await self.load_devices()
             await self.start_devices()
             await self.add_missing_devices()
             await self.start_retry_manager()
