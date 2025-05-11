@@ -1,10 +1,10 @@
 import base64
 import json
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
 
 from Crypto.Cipher import AES
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 GENERIC_KEY = "a3K8Bx%2r8Y7#xDh"
 GENERIC_GCM_KEY = "{yxAHAY_Lm6pbC/<"

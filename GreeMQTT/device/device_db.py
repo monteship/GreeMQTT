@@ -1,6 +1,6 @@
-import sqlite3
 import os
-from typing import Optional, List
+import sqlite3
+from typing import List, Optional
 
 from GreeMQTT.device.device import Device
 
