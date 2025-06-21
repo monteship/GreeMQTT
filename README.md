@@ -76,6 +76,7 @@ UPDATE_INTERVAL=5
 - `MQTT_USER`/`MQTT_PASSWORD`: MQTT credentials.
 - `MQTT_TOPIC`: Base topic for publishing and subscribing.
 - `UPDATE_INTERVAL`: Polling interval in seconds.
+- `SUBNET`: Optional subnet for device discovery (default: `192.168.1.0/24`).
 
 ## Usage
 

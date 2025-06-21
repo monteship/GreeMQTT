@@ -1,4 +1,5 @@
 import asyncio
+import socket
 from typing import Optional
 
 UDP_PORT = 7000
@@ -44,18 +45,17 @@ class DeviceCommunicator:
         return bytes(response_data) if response_data else None
 
     @staticmethod
-    async def broadcast_scan(ip_address: str) -> Optional[bytes]:
+    async def broadcast_scan(broadcast_ip: str) -> Optional[bytes]:
         loop = asyncio.get_running_loop()
         on_con_lost = loop.create_future()
         response_data = bytearray()
 
         class UDPBroadcastProtocol(asyncio.DatagramProtocol):
-            def __init__(self):
-                self.transport = None
-
             def connection_made(self, transport):
+                sock = transport.get_extra_info("socket")
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 self.transport = transport
-                self.transport.sendto(b'{"t":"scan"}', (ip_address, UDP_PORT))
+                self.transport.sendto(b'{"t":"scan"}', (broadcast_ip, UDP_PORT))
 
             def datagram_received(self, data, addr):
                 response_data.extend(data)
@@ -68,7 +68,7 @@ class DeviceCommunicator:
 
         transport, protocol = await loop.create_datagram_endpoint(
             lambda: UDPBroadcastProtocol(),
-            remote_addr=(ip_address, UDP_PORT),
+            local_addr=("0.0.0.0", 0),
         )
         try:
             await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)
