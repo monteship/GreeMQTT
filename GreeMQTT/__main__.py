@@ -17,10 +17,21 @@ from GreeMQTT.mqtt_handler import set_params, start_device_tasks
 log.info("GreeMQTT package initialized")
 
 
-async def scan_port_7000_on_subnet():
+async def scan_port_7000_on_subnet() -> List[str]:
     subnet = os.environ.get("SUBNET", "192.168.1.0/24")
+    result = await DeviceCommunicator.broadcast_scan(subnet.replace("0/24", "255"))
+    if not result:
+        log.error(
+            "No devices found on the subnet with open port 7000",
+            subnet=subnet,
+        )
+
+        return []
+    else:
+        log.info("1 or more devices found on the subnet", subnet=subnet)
+        log.debug("Initial scan", result=result)
+
     open_ips = []
-    sem = asyncio.Semaphore(100)
     log.info("Scanning subnet", subnet=subnet)
 
     async def check_ip(ip):
@@ -38,6 +49,9 @@ async def scan_port_7000_on_subnet():
         for ip in ipaddress.IPv4Network(subnet)
         if not (str(ip).endswith(".0") or str(ip).endswith(".255"))
     ]
+    # Limit concurrency to avoid overwhelming the network
+    sem = asyncio.Semaphore(len(ip_list) // 2)
+
     tasks = [asyncio.create_task(check_ip(ip)) for ip in ip_list]
     await tqdm_asyncio.gather(*tasks, desc="Scanning IPs", total=len(ip_list))
     return open_ips

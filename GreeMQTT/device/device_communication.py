@@ -1,8 +1,9 @@
 import asyncio
+import os
 import socket
 from typing import Optional
 
-UDP_PORT = 7000
+UDP_PORT = int(os.getenv("UDP_PORT", 7000))
 SOCKET_TIMEOUT = 5
 
 
@@ -10,7 +11,11 @@ class DeviceCommunicator:
     def __init__(self, device_ip: str):
         self.device_ip = device_ip
 
-    async def send_data(self, request: bytes) -> Optional[bytes]:
+    async def send_data(
+        self,
+        request: bytes,
+        udp_port: int = UDP_PORT,
+    ) -> Optional[bytes]:
         loop = asyncio.get_running_loop()
         on_con_lost = loop.create_future()
         response_data = bytearray()
@@ -22,7 +27,7 @@ class DeviceCommunicator:
 
             def connection_made(self, transport):
                 self.transport = transport
-                self.transport.sendto(request, (self.ip, UDP_PORT))
+                self.transport.sendto(request, (self.ip, udp_port))
 
             def datagram_received(self, data, addr):
                 response_data.extend(data)
@@ -35,7 +40,7 @@ class DeviceCommunicator:
 
         transport, protocol = await loop.create_datagram_endpoint(
             lambda: UDPClientProtocol(self.device_ip),
-            remote_addr=(self.device_ip, UDP_PORT),
+            remote_addr=(self.device_ip, udp_port),
         )
         try:
             await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)
@@ -45,7 +50,10 @@ class DeviceCommunicator:
         return bytes(response_data) if response_data else None
 
     @staticmethod
-    async def broadcast_scan(broadcast_ip: str) -> Optional[bytes]:
+    async def broadcast_scan(
+        broadcast_ip: str,
+        udp_port: int = UDP_PORT,
+    ) -> Optional[bytes]:
         loop = asyncio.get_running_loop()
         on_con_lost = loop.create_future()
         response_data = bytearray()
@@ -55,7 +63,7 @@ class DeviceCommunicator:
                 sock = transport.get_extra_info("socket")
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 self.transport = transport
-                self.transport.sendto(b'{"t":"scan"}', (broadcast_ip, UDP_PORT))
+                self.transport.sendto(b'{"t":"scan"}', (broadcast_ip, udp_port))
 
             def datagram_received(self, data, addr):
                 response_data.extend(data)
