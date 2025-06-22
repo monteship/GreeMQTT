@@ -61,7 +61,7 @@ docker build -t greemqtt .
 
 ### 2. Run the Docker Container
 ```bash
-docker run --env-file .env --network host --name greemqtt greemqtt
+docker run --env-file .env --network host --name greemqtt monteship/greemqtt:latest
 ```
 - `--env-file .env`: Loads environment variables from your `.env` file.
 - `--network host`: Required for device discovery on your local network.
@@ -165,6 +165,33 @@ Add the following to your Home Assistant `configuration.yaml` to subscribe to Gr
 - Ensure your devices and the host/container are on the same network segment.
 - Use `--network host` with Docker for proper device discovery.
 - Check logs for errors: `docker logs greemqtt` or console output.
+
+## Helpful commands
+```bash
+echo '{"t":"scan"}' | socat - UDP-DATAGRAM:192.168.1.255:7000,broadcast
+# This command sends a scan request to discover Gree devices on the local network.
+# Example output:
+# {"t":"pack","i":1,"uid":0,"cid":"502cc6a2bdb5","tcid":"","pack":"LP24Ek0OaYogxs3iQLjL4IJZ8Tc1GhwGgU1QWl/HwnMFDrdIfUg0NJmUJNu7AwXqwAOx/ClklKGq9spJo3oG4TnWMzaLQaaw1aFXlE9k71L0cMm8bsr/y4FkxumpRg1t0xV8+/m47OTBNaX/8aUl1dlSUvgTB047e91whA8Mx+BzMQoS41XpnORSG7+GfavhnKYbt0iIDsdp8/ftXlA9HkRwlDB/b65kWltUYwGtbty80gq9HxK8Loa8WXVjgZcP4Vf5MjKxa60Xt5J1oI+lsxUuXTHkgunLg76WWGy+euo="}
+# {"t":"pack","i":1,"uid":0,"cid":"","tcid":"","pack":"LP24Ek0OaYogxs3iQLjL4EZ+Xq1EbShb2ys5VE0+JfaMa9lM2RqI/KytvJ32IsGSZXrOr+MakVzzXHbghPeyiui/giRwi/22P1NeJSbhyoDt21IYC5nmTB0FSNCtGSQCq+qmiRmaZjpRwuO7Fe5EbuQqhDgWpIlXPBd0kSiOb/EJPRFZzjLrUDkhvMjz32yVMkOVsFsTAafzePY7qSehbZIhsbG6Ck8X1+GBAEqEtdxSARmdHzsfl0hV7CQKMyULqf7+wHqDf2mz9uzNFv2ejeSQamdCPojzhBoiY0/QI0FjKzbWMRG6ftFbCalgfYcMphjtFkYpY2Dv1B44KKRYoOqBuo3ABqh7zjtQE21CWaSsH6bNGMeBkcgCC2vvIqV6"}%      
+# Output indicates that Gree devices are present on the network, showing their unique identifiers and capabilities.
+
+
+nmap -sU -p 7000 192.168.1.41
+# This command scans the specified IP address for open UDP port 7000, which is used by Gree devices.
+# Example output:
+# Starting Nmap 7.97 ( https://nmap.org ) at 2025-06-22 17:43 +0300
+# Nmap scan report for 192.168.1.41
+# Host is up (0.023s latency).
+
+# PORT     STATE         SERVICE
+# 7000/udp open|filtered afs3-fileserver
+# MAC Address: 50:2C:C6:A2:BD:B5 (Gree Electric Appliances, OF Zhuhai)
+
+# Nmap done: 1 IP address (1 host up) scanned in 4.93 seconds
+# Output indicates that the Gree device is reachable on port 7000, confirming its presence on the network.
+
+```
+
 
 ## Contributing
 Contributions are welcome! Please open an issue or submit a pull request for suggestions or improvements.
