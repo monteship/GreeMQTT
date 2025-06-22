@@ -30,7 +30,7 @@ python -m pip install -e .
 ### 3. Configure Environment Variables
 Create a `.env` file in the root directory and set the following variables:
 ```env
-NETWORK=192.168.1.100,192.168.1.101
+NETWORK=192.168.1.100,192.168.1.101 
 MQTT_BROKER=your_mqtt_broker
 MQTT_PORT=your_mqtt_port
 MQTT_USER=your_mqtt_user
@@ -38,6 +38,15 @@ MQTT_PASSWORD=your_mqtt_password
 MQTT_TOPIC=your_mqtt_topic
 UPDATE_INTERVAL=5
 ```
+## Configuration Explanation
+- `NETWORK`: Comma-separated list of Gree device IPs or leave empty for auto-discovery.
+- `MQTT_BROKER`: Address of your MQTT broker.
+- `MQTT_PORT`: MQTT broker port (default: 1883).
+- `MQTT_USER`/`MQTT_PASSWORD`: MQTT credentials.
+- `MQTT_TOPIC`: Base topic for publishing and subscribing.
+- `UPDATE_INTERVAL`: Polling interval in seconds.
+- `SUBNET`: (Optional) subnet for device discovery (default: `192.168.1.0/24`).
+- `UDP_PORT`: (Optional) UDP port for device communication (default: `7000`).
 
 ### 4. Run the Application
 ```bash
@@ -56,27 +65,6 @@ docker run --env-file .env --network host --name greemqtt greemqtt
 ```
 - `--env-file .env`: Loads environment variables from your `.env` file.
 - `--network host`: Required for device discovery on your local network.
-
-## Configuration Example
-
-Example `.env` file:
-```env
-NETWORK=192.168.1.100,192.168.1.101
-MQTT_BROKER=192.168.1.10
-MQTT_PORT=1883
-MQTT_USER=homeassistant
-MQTT_PASSWORD=yourpassword
-MQTT_TOPIC=gree
-UPDATE_INTERVAL=5
-```
-
-- `NETWORK`: Comma-separated list of Gree device IPs or leave empty for auto-discovery.
-- `MQTT_BROKER`: Address of your MQTT broker.
-- `MQTT_PORT`: MQTT broker port (default: 1883).
-- `MQTT_USER`/`MQTT_PASSWORD`: MQTT credentials.
-- `MQTT_TOPIC`: Base topic for publishing and subscribing.
-- `UPDATE_INTERVAL`: Polling interval in seconds.
-- `SUBNET`: Optional subnet for device discovery (default: `192.168.1.0/24`).
 
 ## Usage
 
