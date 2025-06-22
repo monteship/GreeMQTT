@@ -3,7 +3,7 @@ import os
 import socket
 from typing import Optional
 
-UDP_PORT = os.getenv("UDP_PORT", 7000)
+UDP_PORT = int(os.getenv("UDP_PORT", 7000))
 SOCKET_TIMEOUT = 5
 
 
