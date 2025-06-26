@@ -59,7 +59,7 @@ class DeviceCommunicator:
         response_data = bytearray()
 
         # Determine if this is a broadcast IP (ends with .255) or a specific IP
-        is_broadcast = target_ip.endswith('.255')
+        is_broadcast = target_ip.endswith(".255")
 
         class UDPScanProtocol(asyncio.DatagramProtocol):
             def connection_made(self, transport):
@@ -91,7 +91,7 @@ class DeviceCommunicator:
                 lambda: UDPScanProtocol(),
                 remote_addr=(target_ip, udp_port),
             )
-        
+
         try:
             await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)
         except asyncio.TimeoutError:

@@ -1,8 +1,15 @@
 import aiomqtt
 from aiomqtt import Will
 
-from GreeMQTT.config import (MQTT_BROKER, MQTT_KEEP_ALIVE, MQTT_PASSWORD,
-                             MQTT_PORT, MQTT_QOS, MQTT_TOPIC, MQTT_USER)
+from GreeMQTT.config import (
+    MQTT_BROKER,
+    MQTT_KEEP_ALIVE,
+    MQTT_PASSWORD,
+    MQTT_PORT,
+    MQTT_QOS,
+    MQTT_TOPIC,
+    MQTT_USER,
+)
 
 
 async def create_mqtt_client() -> aiomqtt.Client:

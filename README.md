@@ -66,6 +66,23 @@ docker run --env-file .env --network host --name greemqtt monteship/greemqtt:lat
 - `--env-file .env`: Loads environment variables from your `.env` file.
 - `--network host`: Required for device discovery on your local network.
 
+### 3. Health Monitoring
+The Docker image includes a built-in health check that monitors:
+- Application responsiveness
+- Required environment variables
+- MQTT broker connectivity
+
+Docker will automatically check the container health every 30 seconds. You can view health status with:
+```bash
+docker ps
+docker inspect greemqtt --format='{{.State.Health.Status}}'
+```
+
+The health check logs can be viewed with:
+```bash
+docker logs greemqtt
+```
+
 ## Usage
 
 ### 1. Device Discovery
@@ -165,6 +182,13 @@ Add the following to your Home Assistant `configuration.yaml` to subscribe to Gr
 - Ensure your devices and the host/container are on the same network segment.
 - Use `--network host` with Docker for proper device discovery.
 - Check logs for errors: `docker logs greemqtt` or console output.
+
+### Docker Health Check Issues
+If the Docker container shows as unhealthy, you can:
+- Check health status: `docker inspect greemqtt --format='{{.State.Health.Status}}'`
+- View health check logs in the container logs: `docker logs greemqtt`
+- Manually run the health check: `docker exec greemqtt python /app/healthcheck.py`
+- Verify MQTT broker connectivity from the container: `docker exec greemqtt nc -zv $MQTT_BROKER 1883`
 
 ## Helpful commands
 ```bash
