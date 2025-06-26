@@ -1,0 +1,7 @@
+structlog~=25.3.0
+aiomqtt==2.4.0
+python-dotenv~=1.1.0
+crypto~=1.4.1
+pycryptodome~=3.22.0
+cryptography~=44.0.3
+tqdm~=4.67.1

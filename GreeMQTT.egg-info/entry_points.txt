@@ -1,0 +1,2 @@
+[console_scripts]
+GreeMQTT = GreeMQTT.__main__:main
