@@ -2,3 +2,5 @@
 /.idea
 /devices.db
 /.env
+*.egg-info/
+test.env
