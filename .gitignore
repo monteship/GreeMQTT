@@ -4,3 +4,6 @@
 /.env
 *.egg-info/
 test.env
+__pycache__/
+*.pyc
+*.pyo
