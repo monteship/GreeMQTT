@@ -51,19 +51,24 @@ class DeviceCommunicator:
 
     @staticmethod
     async def broadcast_scan(
-        broadcast_ip: str,
+        target_ip: str,
         udp_port: int = UDP_PORT,
     ) -> Optional[bytes]:
         loop = asyncio.get_running_loop()
         on_con_lost = loop.create_future()
         response_data = bytearray()
 
-        class UDPBroadcastProtocol(asyncio.DatagramProtocol):
+        # Determine if this is a broadcast IP (ends with .255) or a specific IP
+        is_broadcast = target_ip.endswith('.255')
+
+        class UDPScanProtocol(asyncio.DatagramProtocol):
             def connection_made(self, transport):
                 sock = transport.get_extra_info("socket")
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                # Only set broadcast flag for actual broadcast addresses
+                if is_broadcast:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 self.transport = transport
-                self.transport.sendto(b'{"t":"scan"}', (broadcast_ip, udp_port))
+                self.transport.sendto(b'{"t":"scan"}', (target_ip, udp_port))
 
             def datagram_received(self, data, addr):
                 response_data.extend(data)
@@ -74,10 +79,19 @@ class DeviceCommunicator:
                 on_con_lost.set_result(False)
                 self.transport.close()
 
-        transport, protocol = await loop.create_datagram_endpoint(
-            lambda: UDPBroadcastProtocol(),
-            local_addr=("0.0.0.0", 0),
-        )
+        if is_broadcast:
+            # For broadcast, bind to any local address
+            transport, protocol = await loop.create_datagram_endpoint(
+                lambda: UDPScanProtocol(),
+                local_addr=("0.0.0.0", 0),
+            )
+        else:
+            # For specific IP, use direct connection
+            transport, protocol = await loop.create_datagram_endpoint(
+                lambda: UDPScanProtocol(),
+                remote_addr=(target_ip, udp_port),
+            )
+        
         try:
             await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)
         except asyncio.TimeoutError:
