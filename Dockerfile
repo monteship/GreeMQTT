@@ -33,6 +33,7 @@ COPY --from=builder /install /usr/local
 
 # Copy only necessary project files
 COPY GreeMQTT /app/GreeMQTT
+COPY healthcheck.py /app/healthcheck.py
 
 # Set environment variables for Python
 ENV PYTHONUNBUFFERED=1 \
@@ -50,5 +51,9 @@ ENV PYTHONUNBUFFERED=1 \
 USER appuser
 
 EXPOSE 1883
+
+# Health check to monitor container health
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python /app/healthcheck.py || exit 1
 
 CMD ["python", "-m", "GreeMQTT"]
