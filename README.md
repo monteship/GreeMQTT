@@ -197,6 +197,60 @@ nmap -sU -p 7000 192.168.1.41
 Contributions are welcome! Please open an issue or submit a pull request for suggestions or improvements.
 Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
 
+### Development Setup
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/monteship/GreeMQTT.git
+cd GreeMQTT
+```
+
+2. **Install development dependencies**
+```bash
+pip install -e ".[test]"
+```
+
+3. **Run tests**
+```bash
+# Run all tests
+pytest
+
+# Run tests with coverage
+pytest --cov=GreeMQTT --cov-report=term-missing
+
+# Run specific test categories
+pytest tests/unit/          # Unit tests only
+pytest tests/integration/   # Integration tests only
+```
+
+4. **Lint code**
+```bash
+# Check code style
+ruff check GreeMQTT
+
+# Format code
+ruff format GreeMQTT
+```
+
+### Testing
+
+The project includes comprehensive unit and integration tests to ensure code reliability:
+
+- **Unit Tests**: Test individual functions and classes in isolation
+  - Configuration parsing (`test_config.py`)
+  - Logger setup (`test_logger.py`) 
+  - MQTT client creation (`test_mqtt_client.py`)
+  - MQTT handler decorators (`test_mqtt_handler.py`)
+  - Device registry (`test_device_registry.py`)
+
+- **Integration Tests**: Test component interactions
+  - MQTT client with device tasks
+  - Configuration integration
+  - Async component coordination
+  - Error handling across components
+
+Tests use pytest with async support and comprehensive mocking to avoid external dependencies during testing.
+
 ## Support
 For questions or issues, open an issue on [GitHub](https://github.com/monteship/GreeMQTT/issues).
 

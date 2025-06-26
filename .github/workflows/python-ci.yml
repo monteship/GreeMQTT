@@ -2,35 +2,46 @@ name: Python CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8
+          pip install ruff pytest pytest-asyncio pytest-mock pytest-cov
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f pyproject.toml ]; then pip install .; fi
+          if [ -f pyproject.toml ]; then pip install -e .; fi
 
-      - name: Lint with flake8
+      - name: Lint with ruff
         run: |
-          flake8 GreeMQTT --count --select=E9,F63,F7,F82 --show-source --statistics
-          flake8 GreeMQTT --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          ruff check GreeMQTT --output-format=github
+          ruff format GreeMQTT --check
 
-      - name: Run tests
+      - name: Run tests with coverage
+        env:
+          MQTT_BROKER: test_broker
         run: |
-          if [ -d tests ]; then pytest; else echo "No tests directory found."; fi
+          pytest tests/ --cov=GreeMQTT --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
