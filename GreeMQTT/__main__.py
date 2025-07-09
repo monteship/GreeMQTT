@@ -12,7 +12,7 @@ from GreeMQTT.device.device_communication import DeviceCommunicator
 from GreeMQTT.device.device_retry_manager import DeviceRetryManager
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import create_mqtt_client
-from GreeMQTT.mqtt_handler import set_params, start_device_tasks
+from GreeMQTT.mqtt_handler import set_params, start_cleanup_task, start_device_tasks
 
 log.info("GreeMQTT package initialized")
 
@@ -116,6 +116,7 @@ class GreeMQTTApp:
             await self.start_devices()
             await self.add_missing_devices()
             await self.start_retry_manager()
+            await start_cleanup_task(self.stop_event)
             await asyncio.create_task(set_params(self.mqtt_client, self.stop_event))
             try:
                 while True:
