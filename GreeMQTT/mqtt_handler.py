@@ -6,12 +6,14 @@ from typing import Callable
 
 from aiomqtt import Client
 
-from GreeMQTT.config import MQTT_QOS, MQTT_RETAIN, UPDATE_INTERVAL
+from GreeMQTT.adaptive_polling_manager import AdaptivePollingManager
+from GreeMQTT.config import MQTT_QOS, MQTT_RETAIN
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_registry import DeviceRegistry
 from GreeMQTT.logger import log
 
 device_registry = DeviceRegistry()
+adaptive_polling_manager = AdaptivePollingManager()
 
 
 async def start_device_tasks(
@@ -32,6 +34,22 @@ async def start_device_tasks(
     )
     asyncio.create_task(subscribe(device, mqtt_client, MQTT_QOS))
     log.info("Started tasks for device", device=str(device))
+
+
+async def start_cleanup_task(stop_event: asyncio.Event):
+    """
+    Start cleanup task for adaptive polling manager.
+    """
+    asyncio.create_task(cleanup_adaptive_polling_states(stop_event))
+
+
+async def cleanup_adaptive_polling_states(stop_event: asyncio.Event):
+    """
+    Periodically clean up expired adaptive polling states.
+    """
+    while not stop_event.is_set():
+        await asyncio.sleep(300)  # Clean up every 5 minutes
+        await adaptive_polling_manager.cleanup_expired_states()
 
 
 def async_safe_handle(func: Callable) -> Callable:
@@ -114,6 +132,10 @@ async def set_params(mqtt_client: Client, stop_event: asyncio.Event):
         try:
             params = json.loads(message.payload.decode("utf-8"))
             response = await device.set_params(params)
+            
+            # Trigger adaptive polling when a command is received
+            await adaptive_polling_manager.trigger_adaptive_polling(device.device_id)
+            
             log.debug(
                 "Set parameters for device",
                 device_id=device.device_id,
@@ -150,4 +172,7 @@ async def get_params(
                 qos=qos,
                 retain=retain,
             )
-        await asyncio.sleep(UPDATE_INTERVAL)
+        
+        # Use adaptive polling interval if available
+        polling_interval = await adaptive_polling_manager.get_polling_interval(device.device_id)
+        await asyncio.sleep(polling_interval)
