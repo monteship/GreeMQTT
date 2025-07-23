@@ -7,13 +7,20 @@ from typing import Callable
 from aiomqtt import Client
 
 from GreeMQTT.adaptive_polling_manager import AdaptivePollingManager
-from GreeMQTT.config import MQTT_QOS, MQTT_RETAIN
+from GreeMQTT.config import (
+    MQTT_QOS,
+    MQTT_RETAIN,
+    ADAPTIVE_POLLING_TIMEOUT,
+    ADAPTIVE_FAST_INTERVAL,
+)
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_registry import DeviceRegistry
 from GreeMQTT.logger import log
 
 device_registry = DeviceRegistry()
-adaptive_polling_manager = AdaptivePollingManager()
+adaptive_polling_manager = AdaptivePollingManager(
+    ADAPTIVE_POLLING_TIMEOUT, ADAPTIVE_FAST_INTERVAL
+)
 
 
 async def start_device_tasks(
@@ -48,7 +55,7 @@ async def cleanup_adaptive_polling_states(stop_event: asyncio.Event):
     Periodically clean up expired adaptive polling states.
     """
     while not stop_event.is_set():
-        await asyncio.sleep(300)  # Clean up every 5 minutes
+        await asyncio.sleep(1)  # Clean up every 5 minutes
         await adaptive_polling_manager.cleanup_expired_states()
 
 
@@ -132,10 +139,10 @@ async def set_params(mqtt_client: Client, stop_event: asyncio.Event):
         try:
             params = json.loads(message.payload.decode("utf-8"))
             response = await device.set_params(params)
-            
+
             # Trigger adaptive polling when a command is received
             await adaptive_polling_manager.trigger_adaptive_polling(device.device_id)
-            
+
             log.debug(
                 "Set parameters for device",
                 device_id=device.device_id,
@@ -172,7 +179,9 @@ async def get_params(
                 qos=qos,
                 retain=retain,
             )
-        
+
         # Use adaptive polling interval if available
-        polling_interval = await adaptive_polling_manager.get_polling_interval(device.device_id)
+        polling_interval = await adaptive_polling_manager.get_polling_interval(
+            device.device_id
+        )
         await asyncio.sleep(polling_interval)
