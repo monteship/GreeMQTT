@@ -190,6 +190,27 @@ If the Docker container shows as unhealthy, you can:
 - Manually run the health check: `docker exec greemqtt python /app/healthcheck.py`
 - Verify MQTT broker connectivity from the container: `docker exec greemqtt nc -zv $MQTT_BROKER 1883`
 
+### Docker UDP Broadcast Troubleshooting
+
+If device discovery works on the host but not inside Docker:
+
+- Ensure you run the container with `--network host` (required for UDP broadcast).
+- Make sure UDP port 7000 is open on your host firewall:
+  `sudo ufw allow 7000/udp`
+- Some environments (cloud VMs, certain NAS, or Docker Desktop on Mac/Windows) do not support `--network host` or UDP broadcast. In these cases, device discovery may not work from inside Docker.
+- As a workaround, specify device IPs directly in your `.env` file using the `NETWORK` variable:
+  ```
+  NETWORK=192.168.1.41,192.168.1.40
+  ```
+- You can test UDP broadcast from inside the container:
+  ```bash
+  docker exec -u root -it greemqtt bash
+  apt update && apt install -y socat
+  echo '{"t":"scan"}' | socat - UDP-DATAGRAM:192.168.1.255:7000,broadcast
+  ```
+  If you see no output, UDP broadcast is not working in your Docker environment.
+
+
 ## Helpful commands
 ```bash
 echo '{"t":"scan"}' | socat - UDP-DATAGRAM:192.168.1.255:7000,broadcast

@@ -81,6 +81,8 @@ log.debug(
 
 # Update interval
 UPDATE_INTERVAL: int = get_env_int("UPDATE_INTERVAL", 4)
+ADAPTIVE_POLLING_TIMEOUT: int = get_env_int("ADAPTIVE_POLLING_TIMEOUT", 60)
+ADAPTIVE_FAST_INTERVAL: int = get_env_int("ADAPTIVE_FAST_INTERVAL", 1)
 
 # Tracking parameters
 DEFAULT_PARAMS = (
