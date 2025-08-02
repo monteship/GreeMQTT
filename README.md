@@ -1,65 +1,65 @@
-# Project: GreeMQTT
+# GreeMQTT
 
 ## Description
-GreeMQTT bridges Gree air conditioners and similar devices to MQTT, enabling seamless integration with smart home platforms like Home Assistant. It discovers Gree devices on your network, retrieves their parameters, and allows control via MQTT topics with **enhanced responsiveness** and **multi-tier adaptive polling** for ultra-fast command response times.
+GreeMQTT bridges Gree air conditioners and similar devices to MQTT, enabling integration with smart home platforms like Home Assistant. It discovers Gree devices on your network, retrieves their parameters, and allows control via MQTT topics with fast response times and adaptive polling.
 
-## ✨ Key Features
-- **⚡ Instant Callback System**: Zero-latency MQTT message processing with direct callbacks
-- **🚀 Enhanced Responsiveness**: Sub-second command response (50-150ms typical)
-- **🎯 Immediate Execution**: Commands processed instantly without queue delays
-- **⚡ Concurrent Processing**: Multiple MQTT commands processed simultaneously  
-- **🎯 Immediate Feedback**: Instant device state publishing after parameter changes
-- **📊 Performance Monitoring**: Real-time processing metrics and callback statistics
-- **🔄 Smart Polling**: Automatically adjusts polling frequency based on activity
-- **🏎️ Ultra-Low Latency**: Revolutionary callback architecture eliminates bottlenecks
+## Key Features
+- **Fast Response System**: Low-latency MQTT message processing with direct callbacks
+- **Improved Responsiveness**: Sub-second command response times (typically 50-150ms)
+- **Direct Execution**: Commands processed without queue delays
+- **Concurrent Processing**: Multiple MQTT commands processed simultaneously  
+- **Immediate Feedback**: Device state publishing after parameter changes
+- **Performance Monitoring**: Processing metrics and callback statistics
+- **Adaptive Polling**: Automatically adjusts polling frequency based on activity
+- **Low Latency**: Callback architecture reduces processing bottlenecks
 - Automatic device discovery on the local network
-- Periodic device parameter updates with intelligent intervals
+- Periodic device parameter updates with configurable intervals
 - MQTT-based control for setting and retrieving device parameters
 - Configuration via environment variables or `.env` file
 - Docker support for easy deployment
 
-## ⚡ Instant Callback System
+## Fast Response System
 
-### Revolutionary Zero-Latency Architecture
-GreeMQTT features a cutting-edge instant callback system that eliminates traditional queue bottlenecks:
+### Low-Latency Architecture
+GreeMQTT features a callback system that reduces traditional queue bottlenecks:
 
-- **Direct Message Routing**: MQTT messages trigger callbacks immediately upon arrival
-- **Zero-Queue Processing**: No worker queues or message delays
+- **Direct Message Routing**: MQTT messages trigger callbacks upon arrival
+- **Reduced Queue Processing**: Minimizes worker queues and message delays
 - **Concurrent Execution**: Multiple callbacks execute simultaneously for different devices
-- **Instant State Updates**: Device states published immediately after parameter changes
+- **Quick State Updates**: Device states published promptly after parameter changes
 
-### Performance Breakthrough
-**Before (Queue-based)**:
+### Performance Improvements
+**Previous Implementation**:
 - Message → Queue → Worker → Processing → Response
 - Response time: 200-1000ms
 - Single-threaded message handling
 
-**After (Instant Callbacks)**:
-- Message → **Direct Callback** → Immediate Processing → Instant Response
-- Response time: **50-150ms** (60-80% faster!)
+**Current Implementation**:
+- Message → Direct Callback → Processing → Response
+- Response time: 50-150ms (improved performance)
 - Concurrent processing for multiple devices
 
-## 🚀 Enhanced Responsiveness Features
+## Adaptive Polling Features
 
-### Multi-Tier Adaptive Polling
-Combined with the instant callback system for maximum responsiveness:
+### Multi-Tier Polling System
+Combined with the callback system for improved responsiveness:
 
-- **Immediate Mode (0.1s)**: Ultra-fast polling for the first 3 seconds after a command
-- **Ultra-Fast Mode (0.3s)**: High-frequency polling for the next 12 seconds  
+- **High-Frequency Mode (0.1s)**: Fast polling for 3 seconds after a command
+- **Medium-Frequency Mode (0.3s)**: Elevated polling for the next 12 seconds  
 - **Fast Mode (0.8s)**: Accelerated polling for remaining adaptive time
 - **Normal Mode (3s)**: Standard polling when devices are idle
 
-### Advanced Message Processing
-- **Instant callback registration** for each device topic
-- **Zero-latency message execution** without queuing delays
+### Message Processing
+- **Direct callback registration** for each device topic
+- **Reduced-latency message execution** without queuing delays
 - **Concurrent callback processing** for multiple simultaneous commands
-- **Real-time performance tracking** with callback execution metrics
+- **Processing time tracking** with callback execution metrics
 
 ### Performance Monitoring
-- Instant response count tracking
+- Response count tracking
 - Callback execution statistics
-- Real-time processing time tracking
-- Rolling average performance metrics
+- Processing time tracking
+- Average performance metrics
 - Command frequency monitoring per device
 - Adaptive polling statistics
 
@@ -107,7 +107,7 @@ IMMEDIATE_RESPONSE_TIMEOUT=5
 - `SUBNET`: (Optional) subnet for device discovery (default: `192.168.1.0/24`).
 - `UDP_PORT`: (Optional) UDP port for device communication (default: `7000`).
 
-### 🚀 Enhanced Responsiveness Configuration
+### Enhanced Responsiveness Configuration
 - `UPDATE_INTERVAL`: Normal polling interval in seconds (default: 3, reduced from 4 for better responsiveness).
 - `ADAPTIVE_POLLING_TIMEOUT`: Duration of adaptive polling in seconds (default: 45, optimized for faster return to normal).
 - `ADAPTIVE_FAST_INTERVAL`: Fast polling interval during adaptive mode (default: 0.8, improved from 1 second).
