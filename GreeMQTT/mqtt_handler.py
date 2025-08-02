@@ -165,23 +165,42 @@ async def get_params(
     qos: int,
     retain: bool,
 ):
-    """Periodically publishes device parameters to the MQTT topic."""
+    """Periodically publishes device parameters to the MQTT topic when they change."""
     params_topic = device.topic
-    while not stop_event.is_set():
-        params = await device.get_param()
-        if params:
-            params_str = json.dumps(params, separators=(",", ":"))
-            await mqtt_client.publish(params_topic, params_str, qos=qos, retain=retain)
-            log.debug(
-                "Publishing params",
-                topic=params_topic,
-                params=params_str,
-                qos=qos,
-                retain=retain,
-            )
+    last_params = None
 
-        # Use adaptive polling interval if available
+    def filter_volatile_fields(params):
+        """Remove fields that always change (like timestamps) for comparison."""
+        if not isinstance(params, dict):
+            return params
+        filtered = params.copy()
+        # Remove timestamp fields that should not affect change detection
+        filtered.pop("last_seen", None)
+        filtered.pop("timestamp", None)
+        filtered.pop("updated_at", None)
+        return filtered
+
+    while not stop_event.is_set():
         polling_interval = await adaptive_polling_manager.get_polling_interval(
             device.device_id
         )
+        params = await device.get_param()
+        if params:
+
+            # Compare only stable parameters, excluding volatile fields
+            params_for_comparison = filter_volatile_fields(params)
+
+            if params_for_comparison != last_params:
+                params_str = json.dumps(params, separators=(",", ":"))
+                await mqtt_client.publish(
+                    params_topic, params_str, qos=qos, retain=retain
+                )
+                log.debug(
+                    "Publishing params",
+                    topic=params_topic,
+                    params=params_str,
+                    qos=qos,
+                    retain=retain,
+                )
+                last_params = params_for_comparison
         await asyncio.sleep(polling_interval)
