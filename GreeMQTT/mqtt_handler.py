@@ -169,11 +169,11 @@ async def get_params(
     params_topic = device.topic
     last_params = None
 
-    def filter_volatile_fields(params):
+    def filter_volatile_fields(_params):
         """Remove fields that always change (like timestamps) for comparison."""
-        if not isinstance(params, dict):
+        if not isinstance(_params, dict):
             return params
-        filtered = params.copy()
+        filtered = _params.copy()
         # Remove timestamp fields that should not affect change detection
         filtered.pop("last_seen", None)
         return filtered
