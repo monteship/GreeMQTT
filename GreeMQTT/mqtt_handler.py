@@ -406,7 +406,7 @@ async def instant_message_handler(message: Message, mqtt_client: Client) -> None
         await adaptive_polling_manager.trigger_adaptive_polling(device.device_id)
 
         # Set parameters with ultra-low latency
-        await device.set_params(params)  # Remove unused response variable
+        await device.set_params(params)
 
         # Force immediate polling for instant feedback
         await adaptive_polling_manager.force_immediate_polling(
