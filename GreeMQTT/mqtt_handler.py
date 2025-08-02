@@ -15,6 +15,7 @@ from GreeMQTT.config import (
     ADAPTIVE_FAST_INTERVAL,
     MQTT_MESSAGE_WORKERS,
     IMMEDIATE_RESPONSE_TIMEOUT,
+    UPDATE_INTERVAL,
 )
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_registry import DeviceRegistry
@@ -317,6 +318,7 @@ async def get_params(
         return filtered
 
     while not stop_event.is_set():
+        polling_interval = UPDATE_INTERVAL  # Initialize with default value
         try:
             polling_interval = await adaptive_polling_manager.get_polling_interval(
                 device.device_id
@@ -369,7 +371,9 @@ async def get_params(
             await asyncio.sleep(error_delay)
 
 
-async def register_message_callback(topic_pattern: str, callback: Callable[[Message, Client], Awaitable[None]]) -> None:
+async def register_message_callback(
+    topic_pattern: str, callback: Callable[[Message, Client], Awaitable[None]]
+) -> None:
     """Register an instant callback for MQTT messages matching a topic pattern."""
     async with callback_registry_lock:
         if topic_pattern not in message_callbacks:
@@ -378,7 +382,9 @@ async def register_message_callback(topic_pattern: str, callback: Callable[[Mess
         log.debug("Registered instant callback", topic_pattern=topic_pattern)
 
 
-async def unregister_message_callback(topic_pattern: str, callback: Callable[[Message, Client], Awaitable[None]]) -> None:
+async def unregister_message_callback(
+    topic_pattern: str, callback: Callable[[Message, Client], Awaitable[None]]
+) -> None:
     """Unregister a message callback."""
     async with callback_registry_lock:
         if topic_pattern in message_callbacks:
@@ -437,9 +443,15 @@ async def instant_message_handler(message: Message, mqtt_client: Client) -> None
         )
 
     except json.JSONDecodeError:
-        log.error("Invalid JSON in instant handler", topic=str(message.topic), payload=message.payload)
+        log.error(
+            "Invalid JSON in instant handler",
+            topic=str(message.topic),
+            payload=message.payload,
+        )
     except Exception as e:
-        log.error("Error in instant message handler", topic=str(message.topic), error=str(e))
+        log.error(
+            "Error in instant message handler", topic=str(message.topic), error=str(e)
+        )
 
 
 async def execute_callbacks(message: Message, mqtt_client: Client) -> None:
@@ -452,7 +464,7 @@ async def execute_callbacks(message: Message, mqtt_client: Client) -> None:
         matching_callbacks = []
         for topic_pattern, callbacks in message_callbacks.items():
             # Simple pattern matching - can be enhanced with regex if needed
-            if topic.startswith(topic_pattern.rstrip('*')) or topic_pattern == topic:
+            if topic.startswith(topic_pattern.rstrip("*")) or topic_pattern == topic:
                 matching_callbacks.extend(callbacks)
 
         # Execute callbacks concurrently for maximum speed
@@ -473,7 +485,9 @@ async def execute_callbacks(message: Message, mqtt_client: Client) -> None:
 
 @async_safe_handle
 @with_retries()
-async def subscribe_with_instant_callback(device: Device, mqtt_client: Client, qos: int):
+async def subscribe_with_instant_callback(
+    device: Device, mqtt_client: Client, qos: int
+):
     """Enhanced subscription with instant callback registration."""
     set_topic = device.set_topic
 
@@ -508,7 +522,9 @@ async def instant_message_loop(mqtt_client: Client, stop_event: asyncio.Event):
         log.info("Instant message loop stopped")
 
 
-async def start_instant_subscription_system(mqtt_client: Client, stop_event: asyncio.Event):
+async def start_instant_subscription_system(
+    mqtt_client: Client, stop_event: asyncio.Event
+):
     """Start the instant callback-based subscription system."""
     # Start the instant message loop
     asyncio.create_task(instant_message_loop(mqtt_client, stop_event))
@@ -533,7 +549,9 @@ async def get_instant_system_stats() -> Dict[str, any]:
     """Get statistics about the instant callback system performance."""
     async with callback_registry_lock:
         registered_topics = len(message_callbacks)
-        total_callbacks = sum(len(callbacks) for callbacks in message_callbacks.values())
+        total_callbacks = sum(
+            len(callbacks) for callbacks in message_callbacks.values()
+        )
 
     return {
         "instant_system_active": True,
@@ -541,6 +559,8 @@ async def get_instant_system_stats() -> Dict[str, any]:
         "total_callbacks": total_callbacks,
         "instant_responses": performance_metrics["instant_responses"],
         "callback_executions": performance_metrics["callback_executions"],
-        "average_processing_time_ms": round(performance_metrics["average_processing_time"] * 1000, 2),
+        "average_processing_time_ms": round(
+            performance_metrics["average_processing_time"] * 1000, 2
+        ),
         "messages_processed": performance_metrics["messages_processed"],
     }
