@@ -176,8 +176,6 @@ async def get_params(
         filtered = params.copy()
         # Remove timestamp fields that should not affect change detection
         filtered.pop("last_seen", None)
-        filtered.pop("timestamp", None)
-        filtered.pop("updated_at", None)
         return filtered
 
     while not stop_event.is_set():
@@ -186,7 +184,6 @@ async def get_params(
         )
         params = await device.get_param()
         if params:
-
             # Compare only stable parameters, excluding volatile fields
             params_for_comparison = filter_volatile_fields(params)
 
