@@ -1,14 +1,41 @@
 # Project: GreeMQTT
 
 ## Description
-GreeMQTT bridges Gree air conditioners and similar devices to MQTT, enabling seamless integration with smart home platforms like Home Assistant. It discovers Gree devices on your network, retrieves their parameters, and allows control via MQTT topics.
+GreeMQTT bridges Gree air conditioners and similar devices to MQTT, enabling seamless integration with smart home platforms like Home Assistant. It discovers Gree devices on your network, retrieves their parameters, and allows control via MQTT topics with **enhanced responsiveness** and **multi-tier adaptive polling** for ultra-fast command response times.
 
-## Features
+## ✨ Key Features
+- **🚀 Enhanced Responsiveness**: Sub-second command response with multi-tier adaptive polling
+- **⚡ Concurrent Processing**: Multiple MQTT commands processed simultaneously  
+- **🎯 Immediate Feedback**: Instant device state publishing after parameter changes
+- **📊 Performance Monitoring**: Real-time processing metrics and statistics
+- **🔄 Smart Polling**: Automatically adjusts polling frequency based on activity
 - Automatic device discovery on the local network
-- Periodic device parameter updates
+- Periodic device parameter updates with intelligent intervals
 - MQTT-based control for setting and retrieving device parameters
 - Configuration via environment variables or `.env` file
 - Docker support for easy deployment
+
+## 🚀 Responsiveness Features
+
+### Multi-Tier Adaptive Polling
+GreeMQTT now features an intelligent polling system that dramatically improves response times:
+
+- **Immediate Mode (0.1s)**: Ultra-fast polling for the first 3 seconds after a command
+- **Ultra-Fast Mode (0.3s)**: High-frequency polling for the next 12 seconds  
+- **Fast Mode (0.8s)**: Accelerated polling for remaining adaptive time
+- **Normal Mode (3s)**: Standard polling when devices are idle
+
+### Concurrent Message Processing
+- **3 worker threads** process MQTT messages simultaneously by default
+- **Non-blocking message queue** prevents command delays
+- **Immediate state publishing** provides instant feedback after parameter changes
+- **Smart queue management** with overflow protection
+
+### Performance Monitoring
+- Real-time processing time tracking
+- Rolling average performance metrics
+- Command frequency monitoring per device
+- Adaptive polling statistics
 
 ## Requirements
 - Python 3.12+
@@ -36,17 +63,36 @@ MQTT_PORT=your_mqtt_port
 MQTT_USER=your_mqtt_user
 MQTT_PASSWORD=your_mqtt_password
 MQTT_TOPIC=your_mqtt_topic
-UPDATE_INTERVAL=5
+UPDATE_INTERVAL=3
+ADAPTIVE_POLLING_TIMEOUT=45
+ADAPTIVE_FAST_INTERVAL=0.8
+MQTT_MESSAGE_WORKERS=3
+IMMEDIATE_RESPONSE_TIMEOUT=5
 ```
+
 ## Configuration Explanation
+
+### Basic Configuration
 - `NETWORK`: Comma-separated list of Gree device IPs or leave empty for auto-discovery.
 - `MQTT_BROKER`: Address of your MQTT broker.
 - `MQTT_PORT`: MQTT broker port (default: 1883).
 - `MQTT_USER`/`MQTT_PASSWORD`: MQTT credentials.
 - `MQTT_TOPIC`: Base topic for publishing and subscribing.
-- `UPDATE_INTERVAL`: Polling interval in seconds.
 - `SUBNET`: (Optional) subnet for device discovery (default: `192.168.1.0/24`).
 - `UDP_PORT`: (Optional) UDP port for device communication (default: `7000`).
+
+### 🚀 Enhanced Responsiveness Configuration
+- `UPDATE_INTERVAL`: Normal polling interval in seconds (default: 3, reduced from 4 for better responsiveness).
+- `ADAPTIVE_POLLING_TIMEOUT`: Duration of adaptive polling in seconds (default: 45, optimized for faster return to normal).
+- `ADAPTIVE_FAST_INTERVAL`: Fast polling interval during adaptive mode (default: 0.8, improved from 1 second).
+- `MQTT_MESSAGE_WORKERS`: Number of concurrent message processor workers (default: 3).
+- `IMMEDIATE_RESPONSE_TIMEOUT`: Duration of ultra-fast polling after commands (default: 5 seconds).
+
+### Performance Tuning Tips
+- **High-traffic environments**: Increase `MQTT_MESSAGE_WORKERS` to 5-7
+- **Low-latency requirements**: Decrease `ADAPTIVE_FAST_INTERVAL` to 0.5
+- **Battery-powered setups**: Increase `UPDATE_INTERVAL` to 5-10 seconds
+- **Critical applications**: Decrease `IMMEDIATE_RESPONSE_TIMEOUT` for longer ultra-fast periods
 
 ### 4. Run the Application
 ```bash
@@ -88,16 +134,38 @@ docker logs greemqtt
 ### 1. Device Discovery
 The application will automatically discover devices on the specified network. You can specify the network in the `.env` file or as an environment variable.
 
-### 2. MQTT Control
-Control devices by publishing messages to the specified MQTT topic. The application listens for incoming messages and updates device parameters accordingly.
+### 2. MQTT Control with Enhanced Responsiveness
+Control devices by publishing messages to the specified MQTT topic. The application now provides:
+- **Sub-second response times** for immediate feedback
+- **Concurrent command processing** for multiple simultaneous operations
+- **Automatic state publishing** after each parameter change
 
-### 3. Parameter Updates
-The application periodically retrieves and publishes device parameters to the specified MQTT topic. The update interval is configurable.
+### 3. Intelligent Parameter Updates
+The application uses smart polling that automatically adjusts based on activity:
+- **0.1-second updates** immediately after commands for instant feedback
+- **Gradual transition** to normal polling as activity decreases
+- **Efficient resource usage** during idle periods
 
-### 4. Example MQTT Messages
-- To set a parameter:
+### 4. Example MQTT Messages with Fast Response
+- To set a parameter (now with sub-second feedback):
 ```bash
 MQTT_TOPIC/deviceId/set {"Pow":1,"SetTem":24}
+# Response typically received within 100-300ms
+```
+
+- Multiple concurrent commands are now supported:
+```bash
+# These commands can be processed simultaneously
+MQTT_TOPIC/device1/set {"Pow":1}
+MQTT_TOPIC/device2/set {"SetTem":22}
+MQTT_TOPIC/device3/set {"WdSpd":"auto"}
+```
+
+### 5. Performance Monitoring
+Monitor system performance through logs:
+```bash
+# Processing time logs show responsiveness metrics
+[DEBUG] Set parameters for device - processing_time_ms: 150.5, avg_processing_time_ms: 200.2
 ```
 
 ## Automatic Device Discovery
