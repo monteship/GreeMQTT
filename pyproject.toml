@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "GreeMQTT"
-version = "1.5.0"
+version = "1.5.1"
 description = "MQTT bridge for Gree devices"
 authors = [
     { name = "monteship", email = "monteship@gmail.com" }
