@@ -6,6 +6,7 @@ from typing import Callable, Dict, Set, Awaitable
 import time
 
 from aiomqtt import Client, Message
+from aiomqtt.exceptions import MqttError
 
 from GreeMQTT.adaptive_polling_manager import AdaptivePollingManager
 from GreeMQTT.config import (
@@ -85,19 +86,41 @@ def async_safe_handle(func: Callable) -> Callable:
     @wraps(func)
     async def wrapper(*args, **kwargs):
         stop_event = kwargs.get("stop_event") or (args[2] if len(args) > 2 else None)
-        while not (stop_event and stop_event.is_set()):
-            try:
-                return await func(*args, **kwargs)
-            except Exception as e:
+
+        # Don't start if already shutting down
+        if stop_event and stop_event.is_set():
+            log.info("Not starting function, shutdown already requested", func=func.__name__)
+            return None
+
+        try:
+            return await func(*args, **kwargs)
+        except (MqttError, ConnectionError, OSError) as e:
+            # Don't retry connection errors during shutdown
+            if stop_event and stop_event.is_set():
+                log.info("Connection error during shutdown, exiting gracefully", func=func.__name__)
+                return None
+            else:
                 log.error(
-                    "Error",
+                    "Connection error",
                     func=func.__name__,
                     e=e,
                     traceback=traceback.format_exc(),
                 )
-                await asyncio.sleep(1)
-        log.info("Exiting gracefully...", func=func.__name__)
-        return None
+                raise
+        except Exception as e:
+            log.error(
+                "Error",
+                func=func.__name__,
+                e=e,
+                traceback=traceback.format_exc(),
+            )
+            # Don't retry during shutdown
+            if stop_event and stop_event.is_set():
+                log.info("Error during shutdown, exiting gracefully", func=func.__name__)
+                return None
+            raise
+        finally:
+            log.info("Exiting gracefully...", func=func.__name__)
 
     return wrapper
 
@@ -108,11 +131,41 @@ def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            # Check if stop_event is provided and if it's set
+            stop_event = kwargs.get("stop_event") or (args[-1] if len(args) > 0 and hasattr(args[-1], 'is_set') else None)
+
             attempt = 0
             current_delay = delay
             while attempt < retries:
+                # Don't retry if we're shutting down
+                if stop_event and stop_event.is_set():
+                    log.info("Shutdown requested, stopping retries", func=func.__name__)
+                    return None
+
                 try:
                     return await func(*args, **kwargs)
+                except (MqttError, ConnectionError, OSError) as e:
+                    # Don't retry MQTT disconnection errors during shutdown
+                    if stop_event and stop_event.is_set():
+                        log.info("Shutdown requested during MQTT error, stopping retries", func=func.__name__)
+                        return None
+
+                    attempt += 1
+                    if attempt >= retries:
+                        log.error(
+                            "Retry limit reached for function",
+                            func=func.__name__,
+                            e=e,
+                        )
+                        raise
+                    log.warning(
+                        "Retrying",
+                        func=func.__name__,
+                        attempt=attempt,
+                        delay=current_delay,
+                    )
+                    await asyncio.sleep(current_delay)
+                    current_delay *= backoff
                 except Exception as e:
                     attempt += 1
                     if attempt >= retries:
@@ -269,6 +322,7 @@ async def set_params(mqtt_client: Client, stop_event: asyncio.Event):
     try:
         async for message in mqtt_client.messages:
             if stop_event.is_set():
+                log.info("Stop event set, breaking message loop")
                 break
 
             # Add message to queue for processing with non-blocking put
@@ -283,15 +337,51 @@ async def set_params(mqtt_client: Client, stop_event: asyncio.Event):
                 except asyncio.QueueEmpty:
                     pass
 
+    except (MqttError, ConnectionError, OSError) as e:
+        if stop_event.is_set():
+            log.info("MQTT disconnected during shutdown, this is expected")
+        else:
+            log.error("MQTT connection error", error=str(e))
+            raise
+    except Exception as e:
+        log.error("Unexpected error in set_params", error=str(e))
+        raise
     finally:
-        # Clean up workers
+        # Clean up workers gracefully
         log.info("Shutting down message processor workers")
+
+        # Cancel all workers
         for worker in workers:
             worker.cancel()
 
-        # Wait for any remaining processing tasks to complete
+        # Wait for workers to finish with timeout
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*workers, return_exceptions=True),
+                timeout=5.0
+            )
+        except asyncio.TimeoutError:
+            log.warning("Some workers didn't finish within timeout, forcing shutdown")
+
+        # Wait for any remaining processing tasks to complete with timeout
         if processing_tasks:
-            await asyncio.gather(*processing_tasks, return_exceptions=True)
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*processing_tasks, return_exceptions=True),
+                    timeout=3.0
+                )
+            except asyncio.TimeoutError:
+                log.warning("Some processing tasks didn't finish within timeout")
+
+        # Clear the message queue
+        while not message_queue.empty():
+            try:
+                message_queue.get_nowait()
+                message_queue.task_done()
+            except asyncio.QueueEmpty:
+                break
+
+        log.info("Message processor cleanup completed")
 
 
 @async_safe_handle
