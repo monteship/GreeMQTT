@@ -1,6 +1,8 @@
 import asyncio
 import ipaddress
 import os
+import signal
+import sys
 from typing import List
 
 from tqdm.asyncio import tqdm_asyncio
@@ -65,6 +67,39 @@ class GreeMQTTApp:
         self.mqtt_client = None
         self.retry_manager = None
         self.network = NETWORK.copy()
+        self.running_tasks = []
+
+    def setup_signal_handlers(self):
+        """Setup signal handlers for graceful shutdown."""
+        def signal_handler(signum, frame):
+            log.info(f"Received signal {signum}, initiating graceful shutdown...")
+            self.stop_event.set()
+
+        # Handle common termination signals
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+        if hasattr(signal, 'SIGHUP'):
+            signal.signal(signal.SIGHUP, signal_handler)
+
+    async def cleanup_tasks(self):
+        """Cancel and cleanup all running tasks."""
+        log.info("Cleaning up running tasks...")
+
+        # Cancel all running tasks
+        for task in self.running_tasks:
+            if not task.done():
+                task.cancel()
+
+        # Wait for tasks to complete with timeout
+        if self.running_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*self.running_tasks, return_exceptions=True),
+                    timeout=10.0
+                )
+                log.info("All tasks cleaned up successfully")
+            except asyncio.TimeoutError:
+                log.warning("Some tasks didn't finish within timeout during cleanup")
 
     async def scan_network(self):
         log.info("NETWORK not provided, scanning for devices on port 7000...")
@@ -110,20 +145,38 @@ class GreeMQTTApp:
             log.info("All devices found, no retry needed.")
 
     async def run(self):
-        async with await create_mqtt_client() as mqtt_client:
-            self.mqtt_client = mqtt_client
-            await self.load_devices()
-            await self.start_devices()
-            await self.add_missing_devices()
-            await self.start_retry_manager()
-            await start_cleanup_task(self.stop_event)
-            await asyncio.create_task(set_params(self.mqtt_client, self.stop_event))
-            try:
-                while True:
-                    await asyncio.sleep(0.1)
-            except KeyboardInterrupt:
-                log.info("Exiting...")
-                self.stop_event.set()
+        # Setup signal handlers for graceful shutdown
+        self.setup_signal_handlers()
+
+        try:
+            async with await create_mqtt_client() as mqtt_client:
+                self.mqtt_client = mqtt_client
+                await self.load_devices()
+                await self.start_devices()
+                await self.add_missing_devices()
+                await self.start_retry_manager()
+                await start_cleanup_task(self.stop_event)
+
+                # Create and track the main MQTT task
+                mqtt_task = asyncio.create_task(set_params(self.mqtt_client, self.stop_event))
+                self.running_tasks.append(mqtt_task)
+
+                # Main application loop with proper shutdown handling
+                try:
+                    while not self.stop_event.is_set():
+                        await asyncio.sleep(0.1)
+                except KeyboardInterrupt:
+                    log.info("Keyboard interrupt received, shutting down...")
+                    self.stop_event.set()
+                finally:
+                    # Cleanup tasks
+                    await self.cleanup_tasks()
+
+        except Exception as e:
+            log.error("Fatal error in main application", error=str(e))
+            self.stop_event.set()
+        finally:
+            log.info("Application shutdown complete")
 
 
 def main():
@@ -131,7 +184,12 @@ def main():
     try:
         asyncio.run(app.run())
     except KeyboardInterrupt:
-        log.info("Exiting...")
+        log.info("Application interrupted")
+    except Exception as e:
+        log.error("Fatal error", error=str(e))
+        sys.exit(1)
+    finally:
+        log.info("Main function completed")
 
 
 if __name__ == "__main__":
