@@ -200,14 +200,15 @@ If the `NETWORK` environment variable is not set, GreeMQTT will automatically sc
 ### Home Assistant Integration
 Add the following to your Home Assistant `configuration.yaml` to subscribe to GreeMQTT topics:
 ```yaml
-- unique_id: "kitchen_ac"
-  name: "Kitchen Gree AC"
+- unique_id: "livingroom_ac"
+  name: "Living Room Gree AC"
   precision: 1
   temperature_command_topic: "gree/deviceId/set"
   temperature_command_template: >
     {"SetTem":{{ value | int }}}
   temperature_state_topic: "gree/deviceId"
   temperature_state_template: "{{ value_json.SetTem }}"
+  max_temp: 30
 
   current_temperature_topic: "gree/deviceId"
   current_temperature_template: "{{ value_json.TemSen }}"
@@ -236,15 +237,31 @@ Add the following to your Home Assistant `configuration.yaml` to subscribe to Gr
 
   fan_mode_command_topic: "gree/deviceId/set"
   fan_mode_command_template: >
-    {"WdSpd":"{{ value }}"}
+    {% if value == 'turbo' %}
+      {"Tur":"on", "Quiet":"off"}
+    {% elif value == 'quiet' %}
+      {"Quiet":"on", "Tur":"off"}
+    {% else %}
+      {"WdSpd":"{{ value }}", "Tur":"off", "Quiet":"off"}
+    {% endif %}
   fan_mode_state_topic: "gree/deviceId"
-  fan_mode_state_template: "{{ value_json.WdSpd }}"
+  fan_mode_state_template: >
+    {% if value_json.Tur == "on" %}
+      turbo
+    {% elif value_json.Quiet == "on" %}
+      quiet
+    {% else %}
+      {{ value_json.WdSpd }}
+    {% endif %}
   fan_modes:
     - auto
     - low
+    - medium-low
     - medium
+    - medium-high
     - high
-
+    - turbo
+    - quiet
   swing_mode_command_topic: "gree/deviceId/set"
   swing_mode_command_template: >
     {"SwUpDn":"{{ value }}"}
@@ -265,7 +282,7 @@ Add the following to your Home Assistant `configuration.yaml` to subscribe to Gr
     - "swing_upmost"
 
   qos: 0
-  retain: false
+  retain: true
 ```
 
 ## Troubleshooting
