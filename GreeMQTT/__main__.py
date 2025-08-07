@@ -10,10 +10,9 @@ from GreeMQTT import device_db
 from GreeMQTT.config import NETWORK
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_communication import DeviceCommunicator
-from GreeMQTT.device.device_retry_manager import DeviceRetryManager
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import create_mqtt_client
-from GreeMQTT.mqtt_handler import set_params, start_cleanup_task, start_device_tasks
+from GreeMQTT.mqtt_handler import start_cleanup_task, start_device_tasks
 
 log.info("GreeMQTT package initialized")
 
@@ -21,8 +20,6 @@ log.info("GreeMQTT package initialized")
 class GreeMQTTApp:
     def __init__(self):
         self.stop_event = asyncio.Event()
-        self.mqtt_client = None
-        self.tasks = []
 
     def setup_signal_handlers(self):
         """Setup signal handlers for graceful shutdown."""
@@ -106,51 +103,25 @@ class GreeMQTTApp:
         # Get network to scan (from config or scan automatically)
         network = NETWORK
         async for device in self.scan_network_for_devices(network):
-            device_ip = device.device_ip
-            if device_ip in network:
-                network.remove(device_ip)
-            await start_device_tasks(device, self.mqtt_client, self.stop_event)
-            log.info("Started device", ip=device.device_ip)
-
-        # Start retry manager for any remaining missing devices
-        if network:
-            retry_manager = DeviceRetryManager(
-                network, self.mqtt_client, self.stop_event
-            )
-            self.tasks.append(asyncio.create_task(retry_manager.run()))
-
-    async def cleanup(self):
-        """Cancel all running tasks."""
-        log.info("Cleaning up tasks")
-        for task in self.tasks:
-            if not task.done():
-                task.cancel()
-
-        if self.tasks:
-            await asyncio.gather(*self.tasks, return_exceptions=True)
-        log.info("Cleanup complete")
+            async with await create_mqtt_client() as mqtt_client:
+                device_ip = device.device_ip
+                if device_ip in network:
+                    network.remove(device_ip)
+                await start_device_tasks(device, mqtt_client, self.stop_event)
+                log.info("Started device", ip=device.device_ip)
 
     async def run(self):
         """Main application entry point."""
         self.setup_signal_handlers()
 
         try:
-            async with await create_mqtt_client() as mqtt_client:
-                self.mqtt_client = mqtt_client
+            # Setup devices and start MQTT communication
+            await self.discover_and_setup_devices()
+            await start_cleanup_task(self.stop_event)
 
-                # Setup devices and start MQTT communication
-                await self.discover_and_setup_devices()
-                await start_cleanup_task(self.stop_event)
-
-                # Start main MQTT parameter handling
-                mqtt_task = asyncio.create_task(
-                    set_params(mqtt_client, self.stop_event)
-                )
-                self.tasks.append(mqtt_task)
-
-                # Wait for shutdown signal
-                log.info("Application running - press Ctrl+C to stop")
-                await self.stop_event.wait()
+            # Wait for shutdown signal
+            log.info("Application running - press Ctrl+C to stop")
+            await self.stop_event.wait()
 
         except Exception as e:
             log.error("Application error", error=str(e))

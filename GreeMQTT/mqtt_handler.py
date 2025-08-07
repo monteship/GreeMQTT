@@ -59,8 +59,9 @@ async def start_device_tasks(
     asyncio.create_task(
         get_params(device, mqtt_client, stop_event, MQTT_QOS, MQTT_RETAIN)
     )
-    # Use instant callback subscription instead of traditional subscribe
-    asyncio.create_task(subscribe_with_instant_callback(device, mqtt_client, MQTT_QOS))
+    asyncio.create_task(
+        subscribe_with_instant_callback(device, mqtt_client, MQTT_QOS),
+    )
     log.info("Started tasks for device with instant callbacks", device=str(device))
 
 
@@ -89,7 +90,9 @@ def async_safe_handle(func: Callable) -> Callable:
 
         # Don't start if already shutting down
         if stop_event and stop_event.is_set():
-            log.info("Not starting function, shutdown already requested", func=func.__name__)
+            log.info(
+                "Not starting function, shutdown already requested", func=func.__name__
+            )
             return None
 
         try:
@@ -97,7 +100,10 @@ def async_safe_handle(func: Callable) -> Callable:
         except (MqttError, ConnectionError, OSError) as e:
             # Don't retry connection errors during shutdown
             if stop_event and stop_event.is_set():
-                log.info("Connection error during shutdown, exiting gracefully", func=func.__name__)
+                log.info(
+                    "Connection error during shutdown, exiting gracefully",
+                    func=func.__name__,
+                )
                 return None
             else:
                 log.error(
@@ -116,7 +122,9 @@ def async_safe_handle(func: Callable) -> Callable:
             )
             # Don't retry during shutdown
             if stop_event and stop_event.is_set():
-                log.info("Error during shutdown, exiting gracefully", func=func.__name__)
+                log.info(
+                    "Error during shutdown, exiting gracefully", func=func.__name__
+                )
                 return None
             raise
         finally:
@@ -132,7 +140,9 @@ def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Check if stop_event is provided and if it's set
-            stop_event = kwargs.get("stop_event") or (args[-1] if len(args) > 0 and hasattr(args[-1], 'is_set') else None)
+            stop_event = kwargs.get("stop_event") or (
+                args[-1] if len(args) > 0 and hasattr(args[-1], "is_set") else None
+            )
 
             attempt = 0
             current_delay = delay
@@ -147,7 +157,10 @@ def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
                 except (MqttError, ConnectionError, OSError) as e:
                     # Don't retry MQTT disconnection errors during shutdown
                     if stop_event and stop_event.is_set():
-                        log.info("Shutdown requested during MQTT error, stopping retries", func=func.__name__)
+                        log.info(
+                            "Shutdown requested during MQTT error, stopping retries",
+                            func=func.__name__,
+                        )
                         return None
 
                     attempt += 1
@@ -357,8 +370,7 @@ async def set_params(mqtt_client: Client, stop_event: asyncio.Event):
         # Wait for workers to finish with timeout
         try:
             await asyncio.wait_for(
-                asyncio.gather(*workers, return_exceptions=True),
-                timeout=5.0
+                asyncio.gather(*workers, return_exceptions=True), timeout=5.0
             )
         except asyncio.TimeoutError:
             log.warning("Some workers didn't finish within timeout, forcing shutdown")
@@ -368,7 +380,7 @@ async def set_params(mqtt_client: Client, stop_event: asyncio.Event):
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*processing_tasks, return_exceptions=True),
-                    timeout=3.0
+                    timeout=3.0,
                 )
             except asyncio.TimeoutError:
                 log.warning("Some processing tasks didn't finish within timeout")
