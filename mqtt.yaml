@@ -1,0 +1,155 @@
+- climate:
+    - unique_id: "livingroom_ac"
+      name: "Living Room Gree AC"
+      precision: 1
+      temperature_command_topic: "gree/{device_id}/set"
+      temperature_command_template: >
+        {"SetTem":{{ value | int }}}
+      temperature_state_topic: "gree/{device_id}"
+      temperature_state_template: "{{ value_json.SetTem }}"
+      max_temp: 30
+
+      current_temperature_topic: "gree/{device_id}"
+      current_temperature_template: "{{ value_json.TemSen }}"
+
+      mode_command_topic: "gree/{device_id}/set"
+      mode_command_template: >
+        {% if value == 'off' %}
+          {"Pow":"off"}
+        {% else %}
+          {"Pow":"on","Mod":"{{ value }}"}
+        {% endif %}
+      mode_state_topic: "gree/{device_id}"
+      mode_state_template: >
+        {% if value_json.Pow == "off" %}
+          off
+        {% else %}
+          {{ value_json.Mod }}
+        {% endif %}
+      modes:
+        - "off"
+        - "auto"
+        - "cool"
+        - "dry"
+        - "fan_only"
+        - "heat"
+
+      fan_mode_command_topic: "gree/{device_id}/set"
+      fan_mode_command_template: >
+        {% if value == 'Turbo' %}
+          {"Tur":"on", "Quiet":"off"}
+        {% elif value == 'Quiet' %}
+          {"Quiet":"on", "Tur":"off"}
+        {% elif value == 'Auto' %}
+          {"WdSpd":"auto", "Tur":"off", "Quiet":"off"}
+        {% elif value == 'Low' %}
+          {"WdSpd":"low", "Tur":"off", "Quiet":"off"}
+        {% elif value == 'Medium Low' %}
+          {"WdSpd":"medium-low", "Tur":"off", "Quiet":"off"}
+        {% elif value == 'Medium' %}
+          {"WdSpd":"medium", "Tur":"off", "Quiet":"off"}
+        {% elif value == 'Medium High' %}
+          {"WdSpd":"medium-high", "Tur":"off", "Quiet":"off"}
+        {% elif value == 'High' %}
+          {"WdSpd":"high", "Tur":"off", "Quiet":"off"}
+        {% endif %}
+      fan_mode_state_topic: "gree/{device_id}"
+      fan_mode_state_template: >
+        {% if value_json.Tur == "on" %}
+          Turbo
+        {% elif value_json.Quiet == "on" %}
+          Quiet
+        {% elif value_json.WdSpd == "auto" %}
+          Auto
+        {% elif value_json.WdSpd == "low" %}
+          Low
+        {% elif value_json.WdSpd == "medium-low" %}
+          Medium Low
+        {% elif value_json.WdSpd == "medium" %}
+          Medium
+        {% elif value_json.WdSpd == "medium-high" %}
+          Medium High
+        {% elif value_json.WdSpd == "high" %}
+          High
+        {% else %}
+          Auto
+        {% endif %}
+      fan_modes:
+        - "Auto"
+        - "Low"
+        - "Medium Low"
+        - "Medium"
+        - "Medium High"
+        - "High"
+        - "Turbo"
+        - "Quiet"
+      swing_mode_command_topic: "gree/{device_id}/set"
+      swing_mode_command_template: >
+        {% if value == 'Default' %}
+          {"SwUpDn":"default"}
+        {% elif value == 'Full Swing' %}
+          {"SwUpDn":"full_swing"}
+        {% elif value == 'Fixed Top' %}
+          {"SwUpDn":"fixed_upmost"}
+        {% elif value == 'Fixed Middle Up' %}
+          {"SwUpDn":"fixed_middle_up"}
+        {% elif value == 'Fixed Middle' %}
+          {"SwUpDn":"fixed_middle"}
+        {% elif value == 'Fixed Middle Low' %}
+          {"SwUpDn":"fixed_middle_low"}
+        {% elif value == 'Fixed Bottom' %}
+          {"SwUpDn":"fixed_lowest"}
+        {% endif %}
+      swing_mode_state_topic: "gree/{device_id}"
+      swing_mode_state_template: >
+        {% if value_json.SwUpDn == "default" %}
+          Default
+        {% elif value_json.SwUpDn == "full_swing" %}
+          Full Swing
+        {% elif value_json.SwUpDn == "fixed_upmost" %}
+          Fixed Top
+        {% elif value_json.SwUpDn == "fixed_middle_up" %}
+          Fixed Middle Up
+        {% elif value_json.SwUpDn == "fixed_middle" %}
+          Fixed Middle
+        {% elif value_json.SwUpDn == "fixed_middle_low" %}
+          Fixed Middle Low
+        {% elif value_json.SwUpDn == "fixed_lowest" %}
+          Fixed Bottom
+        {% else %}
+          Default
+        {% endif %}
+      swing_modes:
+        - "Default"
+        - "Full Swing"
+        - "Fixed Top"
+        - "Fixed Middle Up"
+        - "Fixed Middle"
+        - "Fixed Middle Low"
+        - "Fixed Bottom"
+
+      qos: 0
+      retain: true
+
+- switch:
+    - unique_id: "livingroom_ac_health"
+      name: "Living Room AC Health"
+      command_topic: "gree/{device_id}/set"
+      value_template: "{{ value_json.Health }}"
+      payload_on: '{"Health": "on"}'
+      payload_off: '{"Health": "off"}'
+      state_topic: "gree/{device_id}"
+      optimistic: true
+      retain: true
+
+
+- sensor:
+    - unique_id: "livingroom_ac_temperature"
+      name: "Living Room Gree AC Temperature"
+      state_topic: "gree/{device_id}"
+      value_template: "{{ value_json.TemSen }}"
+      unit_of_measurement: "°C"
+      device_class: temperature
+      icon: mdi:thermometer
+      qos: 0
+
