@@ -1,17 +1,13 @@
-import asyncio
-
-from aiomqtt import Client
-
 from GreeMQTT import device_db
 from GreeMQTT.device.device import Device
 from GreeMQTT.logger import log
-from GreeMQTT.mqtt_handler import start_device_tasks
+from GreeMQTT.mqtt_client import create_mqtt_client
+from GreeMQTT.mqtt_handler import start_device_tasks, interruptible_sleep
 
 
 class DeviceRetryManager:
-    def __init__(self, missing_devices: list, mqtt_client: Client, stop_event):
+    def __init__(self, missing_devices: list, stop_event):
         self.missing_devices = missing_devices
-        self.mqtt_client = mqtt_client
         self.stop_event = stop_event
 
     async def run(self):
@@ -23,10 +19,15 @@ class DeviceRetryManager:
                     device_db.save_device(
                         device.device_id, device.device_ip, device.key, device.is_GCM
                     )
-                    await start_device_tasks(device, self.mqtt_client, self.stop_event)
+                    mqtt_client = await create_mqtt_client()
+                    await mqtt_client.__aenter__()
+                    await start_device_tasks(device, mqtt_client, self.stop_event)
                     self.missing_devices.remove(device_ip)
             if not self.missing_devices:
                 log.info("Retry manager finished, all devices found.")
                 break
-            await asyncio.sleep(300)  # 5 minutes
+            interrupted = await interruptible_sleep(300, self.stop_event)  # 5 minutes
+            if interrupted:
+                log.info("Device retry manager interrupted during sleep")
+                break
             log.info("Retrying missing devices", missing_devices=self.missing_devices)

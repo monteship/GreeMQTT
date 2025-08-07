@@ -113,6 +113,17 @@ class GreeMQTTApp:
             await start_device_tasks(device, mqtt_client, self.stop_event)
             log.info("Started device", ip=device.device_ip)
 
+        if network:
+            log.warning(
+                "Some devices were not found in the network",
+                missing_devices=network,
+            )
+            # Start retry manager for missing devices
+            from GreeMQTT.device.device_retry_manager import DeviceRetryManager
+
+            retry_manager = DeviceRetryManager(network, self.stop_event)
+            await retry_manager.run()
+
     async def run(self):
         """Main application entry point."""
         self.setup_signal_handlers()
