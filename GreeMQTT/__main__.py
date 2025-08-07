@@ -107,9 +107,8 @@ class GreeMQTTApp:
             mqtt_client = await create_mqtt_client()
             await mqtt_client.__aenter__()
 
-            device_ip = device.device_ip
-            if device_ip in network:
-                network.remove(device_ip)
+            if device.device_ip in network:
+                network.remove(device.device_ip)
             await start_device_tasks(device, mqtt_client, self.stop_event)
             log.info("Started device", ip=device.device_ip)
 
