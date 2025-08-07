@@ -101,14 +101,17 @@ class GreeMQTTApp:
     async def discover_and_setup_devices(self):
         """Discover devices and set them up for MQTT communication."""
         # Get network to scan (from config or scan automatically)
-        network = NETWORK
+        network = NETWORK.copy() if NETWORK else []
+
         async for device in self.scan_network_for_devices(network):
-            async with await create_mqtt_client() as mqtt_client:
-                device_ip = device.device_ip
-                if device_ip in network:
-                    network.remove(device_ip)
-                await start_device_tasks(device, mqtt_client, self.stop_event)
-                log.info("Started device", ip=device.device_ip)
+            mqtt_client = await create_mqtt_client()
+            await mqtt_client.__aenter__()
+
+            device_ip = device.device_ip
+            if device_ip in network:
+                network.remove(device_ip)
+            await start_device_tasks(device, mqtt_client, self.stop_event)
+            log.info("Started device", ip=device.device_ip)
 
     async def run(self):
         """Main application entry point."""
@@ -125,9 +128,6 @@ class GreeMQTTApp:
 
         except Exception as e:
             log.error("Application error", error=str(e))
-        finally:
-            await self.cleanup()
-            log.info("Application stopped")
 
 
 def main():
