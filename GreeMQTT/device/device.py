@@ -1,4 +1,5 @@
 import datetime
+import re
 import json
 from typing import Dict, Optional, Self
 
@@ -59,12 +60,28 @@ class Device:
         while retries < max_retries:
             request = self._bind_request(1)
             result = await self._send_data(request)
+            log.debug(
+                "Bind request sent",
+                device_id=self.device_id,
+                request=request.decode(),
+                retry=retries,
+            )
             if not result:
                 if not self.is_GCM:
                     self.is_GCM = True
                     self.encryptor.update_gcm(True)
                     retries += 1
+                    log.info(
+                        "Retrying bind with GCM encryption",
+                        device_id=self.device_id,
+                        retry=retries,
+                    )
                     continue
+                log.error(
+                    "Failed to bind to device",
+                    device_id=self.device_id,
+                    retry=retries,
+                )
                 return None
             response = json.loads(result)
             if response["t"] == "pack":
@@ -77,8 +94,23 @@ class Device:
                     log.info("Bind succeeded", device_id=self.device_id, key=key)
                     self.key = key
                     self.encryptor.update_key(key)
+                    log.info(
+                        "Device key updated",
+                        device_id=self.device_id,
+                        key=self.key,
+                    )
                     return self
+                log.error(
+                    "Bind failed",
+                    device_id=self.device_id,
+                    response=decrypted_response,
+                )
                 return None
+            log.error(
+                "Unexpected response during bind",
+                device_id=self.device_id,
+                response=response,
+            )
             return None
         log.error("Bind failed after maximum retries", device_id=self.device_id)
         return None
@@ -147,9 +179,15 @@ class Device:
         decrypted_response = encryptor.decrypt(response)
         name = decrypted_response.get("name", "Unknown")
         cid = decrypted_response.get("cid", response.get("cid"))
+        if not cid:
+            # Some Air Conditioners may not return cid in the response example `V3.0.0`
+            cid = decrypted_response.get("mac")
+        if not cid:
+            log.error(
+                "Device ID (cid) not found in response", response=decrypted_response
+            )
+            return None
         if not is_GCM and "ver" in decrypted_response:
-            import re
-
             ver = re.search(r"(?<=V)[0-9]+(?<=.)", decrypted_response["ver"])
             if ver and int(ver.group(0)) >= 2:
                 log.info(
