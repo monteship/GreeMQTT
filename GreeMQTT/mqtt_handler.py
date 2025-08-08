@@ -117,7 +117,8 @@ def async_safe_handle(func: Callable) -> Callable:
                 return None
             raise
         finally:
-            log.info("Exiting gracefully...", func=func.__name__)
+            if stop_event and stop_event.is_set():
+                log.info("Exiting gracefully...", func=func.__name__)
 
     return wrapper
 
