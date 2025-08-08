@@ -35,13 +35,13 @@ class GreeMQTTApp:
         self, device_ips: List[str]
     ) -> AsyncGenerator[Device, None]:
         """Scan network for devices on port 7000."""
+        known_devices = device_db.get_all_devices()
         if not device_ips:
             subnet = os.environ.get("SUBNET", "192.168.1.0/24")
             log.info("Scanning network for devices", subnet=subnet)
 
             # Get all valid IPs (exclude network and broadcast addresses)
             network = ipaddress.IPv4Network(subnet)
-            known_devices = device_db.get_all_devices()
             known_devices_ips = [
                 IPv4Address(device.device_ip)
                 for device in known_devices
@@ -58,16 +58,16 @@ class GreeMQTTApp:
         # Scan IPs concurrently with reasonable limits
         semaphore = asyncio.Semaphore(20)  # Limit concurrent scans
 
-        async def scan_ip(ip) -> Optional[Device]:
+        async def scan_ip(target_ip: str) -> Optional[Device]:
             async with semaphore:
                 try:
-                    if await DeviceCommunicator.broadcast_scan(str(ip)):
+                    if await DeviceCommunicator.broadcast_scan(target_ip):
                         device = next(
-                            (d for d in known_devices if d.device_ip == str(ip)),
+                            (d for d in known_devices if d.device_ip == target_ip),
                             None,
                         )
                         if not device:
-                            device = await Device.search_devices(str(ip))
+                            device = await Device.search_devices(target_ip)
                             if device and device.key:
                                 device_db.save_device(
                                     device.device_id,
@@ -75,18 +75,20 @@ class GreeMQTTApp:
                                     device.key,
                                     device.is_GCM,
                                 )
-                                log.info("Found new device", ip=str(ip))
+                                log.info("Found new device", ip=target_ip)
                             else:
                                 log.warning(
-                                    "Device not found or invalid key", ip=str(ip)
+                                    "Device not found or invalid key", ip=target_ip
                                 )
                         return device
-                except Exception:
-                    pass  # Ignore scan errors
+                except Exception as e:
+                    log.error("Error scanning IP", ip=target_ip, error=str(e))
+                if len(device_ips) % 20 == 0:
+                    log.info("Scanned IPs", scanned_ips=len(device_ips))
                 return None
 
         # Create all scan tasks
-        scan_tasks = [asyncio.create_task(scan_ip(ip)) for ip in device_ips]
+        scan_tasks = [asyncio.create_task(scan_ip(str(ip))) for ip in device_ips]
 
         # Yield devices as they complete
         for task in asyncio.as_completed(scan_tasks):
