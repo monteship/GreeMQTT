@@ -46,10 +46,7 @@ class ECBEncryptor(Encryptor):
     def encrypt(self, pack: str) -> Dict:
         encryptor = self.create_cipher().encryptor()
         pack_padded = self.add_pkcs7_padding(pack)
-        pack_encrypted = (
-            encryptor.update(bytes(pack_padded, encoding="utf-8"))
-            + encryptor.finalize()
-        )
+        pack_encrypted = encryptor.update(bytes(pack_padded, encoding="utf-8")) + encryptor.finalize()
         pack_encoded = base64.b64encode(pack_encrypted)
         return {"pack": pack_encoded.decode("utf-8")}
 

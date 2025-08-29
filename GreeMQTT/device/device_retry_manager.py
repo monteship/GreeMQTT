@@ -2,7 +2,7 @@ from GreeMQTT import device_db
 from GreeMQTT.device.device import Device
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import create_mqtt_client
-from GreeMQTT.mqtt_handler import start_device_tasks, interruptible_sleep
+from GreeMQTT.mqtt_handler import interruptible_sleep, start_device_tasks
 
 
 class DeviceRetryManager:
@@ -16,9 +16,7 @@ class DeviceRetryManager:
                 device = await Device.search_devices(device_ip)
                 if device and device.key:
                     log.info("New device found", device=str(device))
-                    device_db.save_device(
-                        device.device_id, device.device_ip, device.key, device.is_GCM
-                    )
+                    device_db.save_device(device.device_id, device.device_ip, device.key, device.is_GCM)
                     mqtt_client = await create_mqtt_client()
                     await mqtt_client.__aenter__()
                     await start_device_tasks(device, mqtt_client, self.stop_event)

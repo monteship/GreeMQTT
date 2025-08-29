@@ -76,7 +76,5 @@ class DeviceParamConverter:
                 result[key] = value
         if "SetTem" in result and "TemSen" in result:
             result["TemSen"] = result["TemSen"] - 40
-        result["last_seen"] = (
-            datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-        )
+        result["last_seen"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         return result

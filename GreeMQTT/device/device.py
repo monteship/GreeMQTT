@@ -1,6 +1,6 @@
 import datetime
-import re
 import json
+import re
 from typing import Dict, Optional, Self
 
 from GreeMQTT.config import MQTT_TOPIC
@@ -86,10 +86,7 @@ class Device:
             response = json.loads(result)
             if response["t"] == "pack":
                 decrypted_response = self.encryptor.decrypt(response)
-                if (
-                    "t" in decrypted_response
-                    and decrypted_response["t"].lower() == "bindok"
-                ):
+                if "t" in decrypted_response and decrypted_response["t"].lower() == "bindok":
                     key = decrypted_response["key"]
                     log.info("Bind succeeded", device_id=self.device_id, key=key)
                     self.key = key
@@ -159,9 +156,7 @@ class Device:
                 r=response.get("r"),
             )
         else:
-            log.error(
-                "Failed to synchronize time with device", device_id=self.device_id
-            )
+            log.error("Failed to synchronize time with device", device_id=self.device_id)
 
     def _status_request_pack(self) -> str:
         return DeviceCommandBuilder.status(self.device_id)
@@ -183,16 +178,12 @@ class Device:
             # Some Air Conditioners may not return cid in the response example `V3.0.0`
             cid = decrypted_response.get("mac")
         if not cid:
-            log.error(
-                "Device ID (cid) not found in response", response=decrypted_response
-            )
+            log.error("Device ID (cid) not found in response", response=decrypted_response)
             return None
         if not is_GCM and "ver" in decrypted_response:
             ver = re.search(r"(?<=V)[0-9]+(?<=.)", decrypted_response["ver"])
             if ver and int(ver.group(0)) >= 2:
-                log.info(
-                    "Set GCM encryption because version in search responce is 2 or later"
-                )
+                log.info("Set GCM encryption because version in search responce is 2 or later")
                 is_GCM = True
         device = cls(
             device_ip=ip_address,

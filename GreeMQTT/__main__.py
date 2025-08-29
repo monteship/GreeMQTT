@@ -31,9 +31,8 @@ class GreeMQTTApp:
         for sig in [signal.SIGTERM, signal.SIGINT]:
             signal.signal(sig, handle_shutdown)
 
-    async def scan_network_for_devices(
-        self, device_ips: List[str]
-    ) -> AsyncGenerator[Device, None]:
+    @staticmethod
+    async def scan_network_for_devices(device_ips: List[str]) -> AsyncGenerator[Device, None]:
         """Scan network for devices on port 7000."""
         known_devices = device_db.get_all_devices()
         if not device_ips:
@@ -48,9 +47,7 @@ class GreeMQTTApp:
                 if IPv4Address(device.device_ip) in network.hosts()
             ]
 
-            device_ips = known_devices_ips + [
-                ip for ip in network.hosts() if ip not in known_devices_ips
-            ]
+            device_ips = known_devices_ips + [ip for ip in network.hosts() if ip not in known_devices_ips]
 
             if not device_ips:
                 raise ValueError("No valid IPs found in the specified subnet")
@@ -77,9 +74,7 @@ class GreeMQTTApp:
                                 )
                                 log.info("Found new device", ip=target_ip)
                             else:
-                                log.warning(
-                                    "Device not found or invalid key", ip=target_ip
-                                )
+                                log.warning("Device not found or invalid key", ip=target_ip)
                         return device
                 except Exception as e:
                     log.error("Error scanning IP", ip=target_ip, error=str(e))

@@ -95,13 +95,9 @@ class AdaptivePollingManager:
 
             for device_id in expired_devices:
                 del self._device_states[device_id]
-                log.debug(
-                    "Cleaned up expired adaptive polling state", device_id=device_id
-                )
+                log.debug("Cleaned up expired adaptive polling state", device_id=device_id)
 
-    async def force_immediate_polling(
-        self, device_id: str, duration: float = 5.0
-    ) -> None:
+    async def force_immediate_polling(self, device_id: str, duration: float = 5.0) -> None:
         """
         Force immediate polling for a device for a specified duration.
 

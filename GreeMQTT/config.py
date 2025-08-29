@@ -81,20 +81,12 @@ log.debug(
 
 # Update interval
 UPDATE_INTERVAL: int = get_env_int("UPDATE_INTERVAL", 3)  # Reduced from 4 to 3 seconds
-ADAPTIVE_POLLING_TIMEOUT: int = get_env_int(
-    "ADAPTIVE_POLLING_TIMEOUT", 45
-)  # Reduced from 60 to 45 seconds
-ADAPTIVE_FAST_INTERVAL: int = get_env_int(
-    "ADAPTIVE_FAST_INTERVAL", 0.8
-)  # Reduced from 1 to 0.8 seconds
+ADAPTIVE_POLLING_TIMEOUT: int = get_env_int("ADAPTIVE_POLLING_TIMEOUT", 45)  # Reduced from 60 to 45 seconds
+ADAPTIVE_FAST_INTERVAL: int = get_env_int("ADAPTIVE_FAST_INTERVAL", 0.8)  # Reduced from 1 to 0.8 seconds
 
 # Enhanced responsiveness settings
-MQTT_MESSAGE_WORKERS: int = get_env_int(
-    "MQTT_MESSAGE_WORKERS", 3
-)  # Number of concurrent message processors
-IMMEDIATE_RESPONSE_TIMEOUT: float = get_env_int(
-    "IMMEDIATE_RESPONSE_TIMEOUT", 5
-)  # Ultra-fast polling duration
+MQTT_MESSAGE_WORKERS: int = get_env_int("MQTT_MESSAGE_WORKERS", 3)  # Number of concurrent message processors
+IMMEDIATE_RESPONSE_TIMEOUT: float = get_env_int("IMMEDIATE_RESPONSE_TIMEOUT", 5)  # Ultra-fast polling duration
 
 # Tracking parameters
 DEFAULT_PARAMS = (
