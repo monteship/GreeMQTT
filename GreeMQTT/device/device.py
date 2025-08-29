@@ -120,6 +120,8 @@ class Device:
         return json.dumps(request).encode()
 
     async def get_param(self) -> Optional[Dict]:
+        from GreeMQTT.__main__ import device_db
+
         request = self.encrypt_request(DeviceCommandBuilder.status(self.device_id))
         result = await self._send_data(request.encode())
         if not result:
@@ -128,10 +130,13 @@ class Device:
         response = json.loads(result)
         if response["t"] == "pack":
             params = self.decrypt_response(response)
+            device_db.update_seen_at(self.device_id)
             return DeviceParamConverter.from_device(params)
         return {}
 
     async def set_params(self, params: dict) -> dict[str, str | int] | None:
+        from GreeMQTT.__main__ import device_db
+
         params = DeviceParamConverter.to_device(params)
         pack = DeviceCommandBuilder.set_params(params)
         request = self.encrypt_request(pack)
@@ -139,6 +144,7 @@ class Device:
         if result:
             response = json.loads(result)
             if response["t"] == "pack":
+                device_db.update_seen_at(self.device_id)
                 return self.decrypt_response(response)
             return None
         return None

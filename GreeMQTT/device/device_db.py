@@ -26,62 +26,78 @@ class DeviceDB:
                 device_id TEXT PRIMARY KEY,
                 device_ip TEXT NOT NULL,
                 is_GCM INTEGER NOT NULL,
-                `key` TEXT NOT NULL
+                `key` TEXT NOT NULL,
+                seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         conn.commit()
         conn.close()
 
+    def __enter__(self):
+        self.conn = sqlite3.connect(self.db_path)
+        return self.conn
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if hasattr(self, "conn"):
+            self.conn.close()
+
     def get_device(self, device_id: str) -> Optional[Device]:
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-        c.execute(
-            "SELECT device_id, device_ip, `key`, is_GCM FROM devices WHERE device_id = ?",
-            (device_id,),
-        )
-        row = c.fetchone()
-        conn.close()
-        return (
-            Device(
-                device_ip=row[1],
-                device_id=row[0],
-                name="Load from DB",
-                is_GCM=bool(row[3]),
-                key=row[2],
+        with self as conn:
+            c = conn.cursor()
+            c.execute(
+                "SELECT device_id, device_ip, `key`, is_GCM FROM devices WHERE device_id = ?",
+                (device_id,),
             )
-            if row
-            else None
-        )
+            row = c.fetchone()
+            return (
+                Device(
+                    device_ip=row[1],
+                    device_id=row[0],
+                    name="Load from DB",
+                    is_GCM=bool(row[3]),
+                    key=row[2],
+                )
+                if row
+                else None
+            )
 
     def get_all_devices(self) -> List[Device]:
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-        c.execute("SELECT device_id, device_ip, `key`, is_GCM FROM devices")
-        rows = c.fetchall()
-        conn.close()
-        return [
-            Device(
-                device_ip=row[1],
-                device_id=row[0],
-                name="Load from DB",
-                is_GCM=bool(row[3]),
-                key=row[2],
-            )
-            for row in rows
-        ]
+        with self as conn:
+            c = conn.cursor()
+            c.execute("SELECT device_id, device_ip, `key`, is_GCM FROM devices")
+            rows = c.fetchall()
+            return [
+                Device(
+                    device_ip=row[1],
+                    device_id=row[0],
+                    name="Load from DB",
+                    is_GCM=bool(row[3]),
+                    key=row[2],
+                )
+                for row in rows
+            ]
 
-    def save_device(
-        self,
-        device_id: str,
-        device_ip: str,
-        key: str,
-        is_GCM: bool = False,
-    ):
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-        c.execute(
-            "REPLACE INTO devices (device_id, device_ip, `key`, is_GCM) VALUES (?, ?, ?, ?)",
-            (device_id, device_ip, key, int(is_GCM)),
-        )
-        conn.commit()
-        conn.close()
+    def save_device(self, device_id: str, device_ip: str, key: str, is_GCM: bool = False):
+        with self as conn:
+            c = conn.cursor()
+            c.execute(
+                "REPLACE INTO devices (device_id, device_ip, `key`, is_GCM) VALUES (?, ?, ?, ?)",
+                (device_id, device_ip, key, int(is_GCM)),
+            )
+            conn.commit()
+
+    def get_seen_at_devices(self) -> List:
+        with self as conn:
+            c = conn.cursor()
+            c.execute("SELECT  device_ip, seen_at FROM devices ORDER BY seen_at DESC")
+            rows = c.fetchall()
+            return rows
+
+    def update_seen_at(self, device_id: str):
+        with self as conn:
+            c = conn.cursor()
+            c.execute(
+                "UPDATE devices SET seen_at = CURRENT_TIMESTAMP WHERE device_id = ?",
+                (device_id,),
+            )
+            conn.commit()

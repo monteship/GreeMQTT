@@ -10,9 +10,10 @@ This script verifies that the GreeMQTT application is running properly by checki
 Returns exit code 0 for healthy, 1 for unhealthy.
 """
 
+import datetime
 import os
-import sys
 import socket
+import sys
 
 
 def check_required_env_vars() -> bool:
@@ -42,9 +43,7 @@ def check_mqtt_broker_connectivity() -> bool:
         if result == 0:
             return True
         else:
-            print(
-                f"WARNING: Cannot connect to MQTT broker {broker}:{port} (connection refused)"
-            )
+            print(f"WARNING: Cannot connect to MQTT broker {broker}:{port} (connection refused)")
             # For Docker health checks, we might want to be more lenient during startup
             # Return True if this is just a connection issue but the broker config looks valid
             return False
@@ -72,6 +71,22 @@ def check_application_health() -> bool:
         return False
 
 
+def check_network_connectivity() -> bool:
+    """Check if the application has seen any devices recently."""
+    from GreeMQTT import device_db
+
+    for device_ip, seen_at in device_db.get_seen_at_devices():
+        seen_at = datetime.datetime.fromisoformat(seen_at)
+        if (datetime.datetime.now() - seen_at).total_seconds() > 100:
+            # Skip devices not seen in the last 100 seconds
+            print("Server has not seen device", device_ip, "since", seen_at)
+            return False
+        else:
+            return True
+
+    return True
+
+
 def main() -> int:
     """Main health check function."""
     print("Running GreeMQTT health check...")
@@ -86,6 +101,9 @@ def main() -> int:
 
     # Check MQTT broker connectivity
     if not check_mqtt_broker_connectivity():
+        return 1
+
+    if not check_network_connectivity():
         return 1
 
     print("Health check passed - application is healthy")

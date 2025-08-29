@@ -1,5 +1,4 @@
-# Stage 1: Build
-FROM python:3.13-slim AS builder
+FROM python:3.13-slim
 
 WORKDIR /app
 
@@ -11,49 +10,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
-COPY . .
+COPY pyproject.toml uv.lock /app/
+RUN pip install uv
+RUN uv sync --frozen --no-dev --no-install-project
 
-# Install Python dependencies into /install
-RUN pip install --no-cache-dir --disable-pip-version-check --prefix=/install .
-
-# Stage 2: Final Image
-FROM python:3.13-slim
-LABEL authors="monteship"
-LABEL description="MQTT client for monitoring and controlling devices"
-
-RUN mkdir -p /app && chmod 777 /app
-
-# Create a non-root user and group
-RUN useradd --create-home appuser
-
-WORKDIR /app
-
-# Copy installed Python packages from builder
-COPY --from=builder /install /usr/local
-
-# Copy only necessary project files
-COPY GreeMQTT /app/GreeMQTT
+COPY GreeMQTT /app/GreeMQTT/
 COPY healthcheck.py /app/healthcheck.py
 
-# Set environment variables for Python
+# For testing purposes, uncomment the following lines to set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    LOG_LEVEL=INFO
+    LOG_LEVEL=INFO \
+    NETWORK="192.168.2.150,192.168.2.151" \
+    MQTT_BROKER="192.168.3.10"
 
-# For testing purposes, uncomment the following lines to set environment variables
-#ENV PYTHONUNBUFFERED=1 \
-#    PYTHONDONTWRITEBYTECODE=1 \
-#    LOG_LEVEL=INFO \
-#    NETWORK="192.168.1.40,192.168.1.41" \
-#    MQTT_BROKER="192.168.1.10"
-
-# Use non-root user
-USER appuser
-
-EXPOSE 1883
 
 # Health check to monitor container health
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python /app/healthcheck.py || exit 1
 
-CMD ["python", "-m", "GreeMQTT"]
+CMD ["uv", "run", "GreeMQTT"]
