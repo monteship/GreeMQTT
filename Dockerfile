@@ -20,9 +20,7 @@ COPY healthcheck.py /app/healthcheck.py
 # For testing purposes, uncomment the following lines to set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    LOG_LEVEL=INFO \
-    NETWORK="192.168.2.150,192.168.2.151" \
-    MQTT_BROKER="192.168.3.10"
+    LOG_LEVEL=INFO
 
 
 # Health check to monitor container health
