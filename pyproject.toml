@@ -1,6 +1,6 @@
 [project]
 name = "GreeMQTT"
-version = "1.5.4"
+version = "1.5.5"
 description = "MQTT bridge for Gree devices"
 authors = [
     { name = "monteship", email = "monteship@gmail.com" }
