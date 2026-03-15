@@ -1,32 +1,13 @@
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
-ENV UV_COMPILE_BYTECODE=1
-
-ENV UV_LINK_MODE=copy
-
-ENV UV_NO_DEV=1
-
-ENV UV_TOOL_BIN_DIR=/usr/local/bin
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    gcc \
     libffi-dev \
-    libssl-dev \
     python3-dev \
-    pkg-config \
-    rustc \
-    cargo && \
-    rm -rf /var/lib/apt/lists/*
-
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
 COPY pyproject.toml uv.lock /app/
@@ -35,9 +16,10 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY GreeMQTT /app/GreeMQTT/
 
-ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH="/app:$PYTHONPATH"
+# For testing purposes, uncomment the following lines to set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    LOG_LEVEL=INFO
 
 
 CMD ["uv", "run", "GreeMQTT"]
