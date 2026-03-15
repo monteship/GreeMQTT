@@ -80,13 +80,11 @@ class DeviceCommunicator:
                 self.transport.close()
 
         if is_broadcast:
-            # For broadcast, bind to any local address
             transport, protocol = await loop.create_datagram_endpoint(
                 lambda: UDPScanProtocol(),
                 local_addr=("0.0.0.0", 0),
             )
         else:
-            # For specific IP, use direct connection
             transport, protocol = await loop.create_datagram_endpoint(
                 lambda: UDPScanProtocol(),
                 remote_addr=(target_ip, udp_port),

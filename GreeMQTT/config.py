@@ -5,15 +5,12 @@ from dotenv import load_dotenv
 
 from GreeMQTT.logger import log
 
-# Load environment variables from .env file
 load_dotenv()
 
-# Network configuration
 NETWORK: List[str] | str = os.getenv("NETWORK")
 if isinstance(NETWORK, str):
     NETWORK = [net.strip() for net in NETWORK.split(",") if net.strip()]
 
-# MQTT configuration
 MQTT_BROKER: str = os.getenv("MQTT_BROKER")
 MQTT_PORT: int = os.getenv("MQTT_PORT", 1883)
 MQTT_USER: str = os.getenv("MQTT_USER")

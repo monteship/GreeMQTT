@@ -24,7 +24,7 @@ class DeviceRetryManager:
             if not self.missing_devices:
                 log.info("Retry manager finished, all devices found.")
                 break
-            interrupted = await interruptible_sleep(300, self.stop_event)  # 5 minutes
+            interrupted = await interruptible_sleep(300, self.stop_event)
             if interrupted:
                 log.info("Device retry manager interrupted during sleep")
                 break

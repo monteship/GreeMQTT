@@ -138,10 +138,9 @@ class InternalEventQueue:
 
     def get_stats(self) -> Dict[str, Any]:
         stats = self.stats.copy()
-
         if stats["processing_times"]:
             avg_time = sum(stats["processing_times"]) / len(stats["processing_times"])
-            stats["avg_processing_time_ms"] = round(avg_time * 1000, 2)  # type: ignore
+            stats["avg_processing_time_ms"] = round(avg_time * 1000, 2)
         else:
             stats["avg_processing_time_ms"] = 0.0
 
