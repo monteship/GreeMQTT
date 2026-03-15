@@ -37,9 +37,7 @@ COPY GreeMQTT /app/GreeMQTT/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH="/app:$PYTHONPATH" \
-    LOG_LEVEL=INFO \
-    MQTT_BROKER=192.168.1.100
+    PYTHONPATH="/app:$PYTHONPATH"
 
 
 CMD ["uv", "run", "GreeMQTT"]
