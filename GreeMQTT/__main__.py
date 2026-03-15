@@ -7,9 +7,10 @@ from ipaddress import IPv4Address
 from typing import AsyncGenerator, List, Optional
 
 from GreeMQTT import device_db
-from GreeMQTT.config import NETWORK
+from GreeMQTT.config import EVENT_QUEUE_WORKERS, NETWORK
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_communication import DeviceCommunicator
+from GreeMQTT.event_queue import get_event_queue
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import create_mqtt_client
 from GreeMQTT.mqtt_handler import start_cleanup_task, start_device_tasks
@@ -20,10 +21,9 @@ log.info("GreeMQTT package initialized")
 class GreeMQTTApp:
     def __init__(self):
         self.stop_event = asyncio.Event()
+        self.event_queue = get_event_queue(max_workers=EVENT_QUEUE_WORKERS)
 
     def setup_signal_handlers(self):
-        """Setup signal handlers for graceful shutdown."""
-
         def handle_shutdown(signum, frame):
             log.info(f"Shutdown signal {signum} received")
             self.stop_event.set()
@@ -33,13 +33,10 @@ class GreeMQTTApp:
 
     @staticmethod
     async def scan_network_for_devices(device_ips: List[str]) -> AsyncGenerator[Device, None]:
-        """Scan network for devices on port 7000."""
         known_devices = device_db.get_all_devices()
         if not device_ips:
             subnet = os.environ.get("SUBNET", "192.168.1.0/24")
             log.info("Scanning network for devices", subnet=subnet)
-
-            # Get all valid IPs (exclude network and broadcast addresses)
             network = ipaddress.IPv4Network(subnet)
             known_devices_ips = [
                 IPv4Address(device.device_ip)
@@ -52,8 +49,7 @@ class GreeMQTTApp:
             if not device_ips:
                 raise ValueError("No valid IPs found in the specified subnet")
 
-        # Scan IPs concurrently with reasonable limits
-        semaphore = asyncio.Semaphore(20)  # Limit concurrent scans
+        semaphore = asyncio.Semaphore(20)
 
         async def scan_ip(target_ip: str) -> Optional[Device]:
             async with semaphore:
@@ -82,22 +78,19 @@ class GreeMQTTApp:
                     log.info("Scanned IPs", scanned_ips=len(device_ips))
                 return None
 
-        # Create all scan tasks
         scan_tasks = [asyncio.create_task(scan_ip(str(ip))) for ip in device_ips]
 
-        # Yield devices as they complete
         for task in asyncio.as_completed(scan_tasks):
             try:
                 device = await task
                 if isinstance(device, Device) and device is not None:
                     log.info("Device found", ip=device.device_ip, id=device.device_id)
                     yield device
-            except Exception:
-                pass  # Ignore exceptions from individual scans
+            except Exception as e:
+                log.info(e)
+                pass
 
     async def discover_and_setup_devices(self):
-        """Discover devices and set them up for MQTT communication."""
-        # Get network to scan (from config or scan automatically)
         network = NETWORK.copy() if NETWORK else []
 
         async for device in self.scan_network_for_devices(network):
@@ -114,31 +107,32 @@ class GreeMQTTApp:
                 "Some devices were not found in the network",
                 missing_devices=network,
             )
-            # Start retry manager for missing devices
             from GreeMQTT.device.device_retry_manager import DeviceRetryManager
 
             retry_manager = DeviceRetryManager(network, self.stop_event)
             await retry_manager.run()
 
     async def run(self):
-        """Main application entry point."""
         self.setup_signal_handlers()
 
         try:
-            # Setup devices and start MQTT communication
+            log.info("Starting internal event queue for single-container deployment")
+            await self.event_queue.start()
+
             await self.discover_and_setup_devices()
             await start_cleanup_task(self.stop_event)
 
-            # Wait for shutdown signal
             log.info("Application running - press Ctrl+C to stop")
             await self.stop_event.wait()
 
         except Exception as e:
             log.error("Application error", error=str(e))
+        finally:
+            log.info("Shutting down internal event queue")
+            await self.event_queue.stop()
 
 
 def main():
-    """Simple main function entry point."""
     try:
         app = GreeMQTTApp()
         asyncio.run(app.run())

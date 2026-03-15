@@ -3,7 +3,11 @@
 ## Description
 GreeMQTT bridges Gree air conditioners and similar devices to MQTT, enabling integration with smart home platforms like Home Assistant. It discovers Gree devices on your network, retrieves their parameters, and allows control via MQTT topics with fast response times and adaptive polling.
 
+**Single-Container Architecture**: GreeMQTT runs entirely in one Docker container with an internal event-driven queue system. No external message brokers (Redis, RabbitMQ) required - just a simple, self-contained deployment.
+
 ## Key Features
+- **Single-Container Deployment**: Complete event-driven architecture in one container
+- **Internal Event Queue**: Built-in asyncio-based queue system for event processing
 - **Fast Response System**: Low-latency MQTT message processing with direct callbacks
 - **Improved Responsiveness**: Sub-second command response times (typically 50-150ms)
 - **Direct Execution**: Commands processed without queue delays
@@ -12,6 +16,7 @@ GreeMQTT bridges Gree air conditioners and similar devices to MQTT, enabling int
 - **Performance Monitoring**: Processing metrics and callback statistics
 - **Adaptive Polling**: Automatically adjusts polling frequency based on activity
 - **Low Latency**: Callback architecture reduces processing bottlenecks
+- **No External Dependencies**: No Redis, RabbitMQ, or other message brokers needed
 - Automatic device discovery on the local network
 - Periodic device parameter updates with configurable intervals
 - MQTT-based control for setting and retrieving device parameters
@@ -100,14 +105,14 @@ IMMEDIATE_RESPONSE_TIMEOUT=5
 - `UPDATE_INTERVAL`: Normal polling interval in seconds (default: 3, reduced from 4 for better responsiveness).
 - `ADAPTIVE_POLLING_TIMEOUT`: Duration of adaptive polling in seconds (default: 45, optimized for faster return to normal).
 - `ADAPTIVE_FAST_INTERVAL`: Fast polling interval during adaptive mode (default: 0.8, improved from 1 second).
-- `MQTT_MESSAGE_WORKERS`: Number of concurrent message processor workers (default: 3).
+- `EVENT_QUEUE_WORKERS`: Number of concurrent event queue workers (default: 5, for internal event processing).
 - `IMMEDIATE_RESPONSE_TIMEOUT`: Duration of ultra-fast polling after commands (default: 5 seconds).
 
 ### Performance Tuning Tips
-- **High-traffic environments**: Increase `MQTT_MESSAGE_WORKERS` to 5-7
+- **High-traffic environments**: Increase `EVENT_QUEUE_WORKERS` to 7-10 for more concurrent event processing
 - **Low-latency requirements**: Decrease `ADAPTIVE_FAST_INTERVAL` to 0.5
 - **Battery-powered setups**: Increase `UPDATE_INTERVAL` to 5-10 seconds
-- **Critical applications**: Decrease `IMMEDIATE_RESPONSE_TIMEOUT` for longer ultra-fast periods
+- **Resource-constrained systems**: Decrease `EVENT_QUEUE_WORKERS` to 3 to reduce memory usage
 
 ### 4. Run the Application
 ```bash
@@ -115,19 +120,38 @@ python -m GreeMQTT
 ```
 
 ## Docker Deployment
-### 1. Build the Docker Image
+
+**GreeMQTT runs as a single, self-contained Docker container.** No docker-compose, no external services required.
+
+### 1. Pull or Build the Docker Image
+
+**Option A: Pull from Docker Hub**
+```bash
+docker pull monteship/greemqtt:latest
+```
+
+**Option B: Build Locally**
 ```bash
 docker build -t greemqtt .
 ```
 
-### 2. Run the Docker Container
+### 2. Run the Single Container
 ```bash
 docker run --env-file .env --network host --name greemqtt monteship/greemqtt:latest
 ```
 - `--env-file .env`: Loads environment variables from your `.env` file.
 - `--network host`: Required for device discovery on your local network.
 
-### 3. Health Monitoring
+**That's it!** No orchestration, no external services, no complex setup. Everything runs in this one container.
+
+### 3. Multi-Platform Support
+
+The image supports multiple architectures:
+- `linux/amd64` - x86_64 systems
+- `linux/arm64` - ARM 64-bit (Raspberry Pi 4, Apple Silicon, etc.)
+- `linux/arm/v7` - ARM 32-bit (Raspberry Pi 3, etc.)
+
+### 4. Health Monitoring
 The Docker image includes a built-in health check that monitors:
 - Application responsiveness
 - Required environment variables
@@ -189,6 +213,35 @@ If the `NETWORK` environment variable is not set, GreeMQTT will automatically sc
 ### Home Assistant Integration
 Add the following to your Home Assistant `configuration.yaml` to subscribe to GreeMQTT topics:
 https://github.com/monteship/GreeMQTT/blob/master/mqtt.yaml
+
+## Architecture
+
+GreeMQTT uses a **single-container, event-driven architecture** with an internal queue system.
+
+### Internal Event Queue System
+
+- **Built-in asyncio queue**: Priority-based event processing within the container
+- **No external brokers**: Redis, RabbitMQ, or Celery not required
+- **Concurrent workers**: Multiple asyncio tasks process events concurrently
+- **Direct callbacks**: Critical MQTT commands bypass the queue for ultra-low latency
+- **In-memory state**: All device and polling state managed in-process
+
+### Key Components
+
+1. **InternalEventQueue**: Priority-based asyncio queue for background tasks
+2. **DeviceRegistry**: In-memory topic-to-device mapping
+3. **AdaptivePollingManager**: Dynamic polling frequency management
+4. **Direct MQTT Callbacks**: Instant message processing without queuing
+
+### Why Single Container?
+
+✅ **Simple deployment** - No orchestration needed  
+✅ **Low latency** - Direct in-process communication  
+✅ **Resource efficient** - Minimal memory/CPU overhead  
+✅ **Easy to maintain** - One container to manage  
+✅ **No external dependencies** - Self-contained application  
+
+For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Troubleshooting
 - Ensure devices are on the same network as the application.
