@@ -4,6 +4,7 @@ import re
 from typing import Dict, Optional, Self
 
 from GreeMQTT.config import MQTT_TOPIC
+from GreeMQTT.constants import DEVICE_BIND_MAX_RETRIES
 from GreeMQTT.device.device_command_builder import DeviceCommandBuilder
 from GreeMQTT.device.device_communication import DeviceCommunicator
 from GreeMQTT.device.device_encryption import DeviceEncryptor

@@ -17,6 +17,8 @@ from GreeMQTT.config import (
     MQTT_RETAIN,
     UPDATE_INTERVAL,
 )
+from GreeMQTT.constants import DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, DEFAULT_RETRY_BACKOFF, \
+    ERROR_BACKOFF_MAX_ATTEMPTS, ERROR_BACKOFF_BASE_DELAY, CONSECUTIVE_ERROR_RESET_VALUE
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_registry import DeviceRegistry
 from GreeMQTT.event_queue import get_event_queue
@@ -110,7 +112,8 @@ def async_safe_handle(func: Callable) -> Callable:
     return wrapper
 
 
-def with_retries(retries: int = DEFAULT_RETRY_ATTEMPTS, delay: float = DEFAULT_RETRY_DELAY, backoff: float = DEFAULT_RETRY_BACKOFF):
+def with_retries(retries: int = DEFAULT_RETRY_ATTEMPTS, delay: float = DEFAULT_RETRY_DELAY,
+                 backoff: float = DEFAULT_RETRY_BACKOFF):
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -257,7 +260,8 @@ async def get_params(
                 consecutive_errors=consecutive_errors,
             )
 
-            error_delay = min(polling_interval, ERROR_BACKOFF_BASE_DELAY * (2 ** min(consecutive_errors, ERROR_BACKOFF_MAX_ATTEMPTS)))
+            error_delay = min(polling_interval,
+                              ERROR_BACKOFF_BASE_DELAY * (2 ** min(consecutive_errors, ERROR_BACKOFF_MAX_ATTEMPTS)))
             interrupted = await interruptible_sleep(error_delay, stop_event)
             if interrupted:
                 log.info(
