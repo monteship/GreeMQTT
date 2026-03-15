@@ -1,4 +1,8 @@
+import asyncio
+from typing import List
+
 from GreeMQTT import device_db
+from GreeMQTT.constants import RETRY_MANAGER_SLEEP_DURATION
 from GreeMQTT.device.device import Device
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import create_mqtt_client
@@ -6,25 +10,30 @@ from GreeMQTT.mqtt_handler import interruptible_sleep, start_device_tasks
 
 
 class DeviceRetryManager:
-    def __init__(self, missing_devices: list, stop_event):
+    def __init__(self, missing_devices: List[str], stop_event: asyncio.Event):
         self.missing_devices = missing_devices
         self.stop_event = stop_event
 
     async def run(self):
         while not self.stop_event.is_set():
             for device_ip in self.missing_devices.copy():
-                device = await Device.search_devices(device_ip)
-                if device and device.key:
-                    log.info("New device found", device=str(device))
-                    device_db.save_device(device.device_id, device.device_ip, device.key, device.is_GCM)
-                    mqtt_client = await create_mqtt_client()
-                    await mqtt_client.__aenter__()
-                    await start_device_tasks(device, mqtt_client, self.stop_event)
-                    self.missing_devices.remove(device_ip)
+                try:
+                    device = await Device.search_devices(device_ip)
+                    if device and device.key:
+                        log.info("New device found", device=str(device))
+                        device_db.save_device(device.device_id, device.device_ip, device.key, device.is_GCM)
+                        mqtt_client = await create_mqtt_client()
+                        await mqtt_client.__aenter__()
+                        await start_device_tasks(device, mqtt_client, self.stop_event)
+                        self.missing_devices.remove(device_ip)
+                except ValueError as e:
+                    log.error("Invalid device data during retry", device_ip=device_ip, error=str(e))
+                except Exception as e:
+                    log.error("Error during device retry", device_ip=device_ip, error=str(e))
             if not self.missing_devices:
                 log.info("Retry manager finished, all devices found.")
                 break
-            interrupted = await interruptible_sleep(300, self.stop_event)
+            interrupted = await interruptible_sleep(RETRY_MANAGER_SLEEP_DURATION, self.stop_event)
             if interrupted:
                 log.info("Device retry manager interrupted during sleep")
                 break

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
+from GreeMQTT.constants import MAX_PROCESSING_TIMES_STORED
 from GreeMQTT.logger import log
 
 
@@ -103,8 +104,8 @@ class InternalEventQueue:
                         self.stats["processed"] += 1
                         self.stats["processing_times"].append(processing_time)
 
-                        if len(self.stats["processing_times"]) > 1000:
-                            self.stats["processing_times"] = self.stats["processing_times"][-1000:]
+                        if len(self.stats["processing_times"]) > MAX_PROCESSING_TIMES_STORED:
+                            self.stats["processing_times"] = self.stats["processing_times"][-MAX_PROCESSING_TIMES_STORED:]
 
                     log.debug(
                         "Event processed",

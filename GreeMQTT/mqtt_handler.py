@@ -60,7 +60,7 @@ async def cleanup_adaptive_polling_states(stop_event: asyncio.Event):
 
 async def log_event_queue_stats(stop_event: asyncio.Event):
     while not stop_event.is_set():
-        await interruptible_sleep(60, stop_event)  # Log every 60 seconds
+        await interruptible_sleep(60, stop_event)
         if not stop_event.is_set():
             stats = event_queue.get_stats()
             log.info("Event queue statistics", **stats)
@@ -110,7 +110,7 @@ def async_safe_handle(func: Callable) -> Callable:
     return wrapper
 
 
-def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
+def with_retries(retries: int = DEFAULT_RETRY_ATTEMPTS, delay: float = DEFAULT_RETRY_DELAY, backoff: float = DEFAULT_RETRY_BACKOFF):
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -238,7 +238,7 @@ async def get_params(
                         retain=retain,
                     )
                     last_params = params_for_comparison
-                    consecutive_errors = 0
+                    consecutive_errors = CONSECUTIVE_ERROR_RESET_VALUE
 
             interrupted = await interruptible_sleep(polling_interval, stop_event)
             if interrupted:
@@ -257,7 +257,7 @@ async def get_params(
                 consecutive_errors=consecutive_errors,
             )
 
-            error_delay = min(polling_interval, 0.5 * (2 ** min(consecutive_errors, 4)))
+            error_delay = min(polling_interval, ERROR_BACKOFF_BASE_DELAY * (2 ** min(consecutive_errors, ERROR_BACKOFF_MAX_ATTEMPTS)))
             interrupted = await interruptible_sleep(error_delay, stop_event)
             if interrupted:
                 log.info(
@@ -312,10 +312,8 @@ async def instant_message_handler(message: Message, mqtt_client: Client) -> None
 @with_retries()
 async def subscribe_with_instant_callback(device: Device, mqtt_client: Client, qos: int):
     set_topic = device.set_topic
-
     await mqtt_client.subscribe(set_topic, qos=qos)
     device_registry.register(set_topic, device)
-
     asyncio.create_task(process_device_messages(device, mqtt_client))
 
     log.info("Subscribed with instant callback", topic=set_topic, qos=qos)

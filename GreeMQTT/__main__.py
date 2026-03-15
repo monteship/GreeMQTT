@@ -8,6 +8,7 @@ from typing import AsyncGenerator, List, Optional
 
 from GreeMQTT import device_db
 from GreeMQTT.config import EVENT_QUEUE_WORKERS, NETWORK
+from GreeMQTT.constants import NETWORK_SCAN_SEMAPHORE_LIMIT, NETWORK_SCAN_LOG_INTERVAL
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_communication import DeviceCommunicator
 from GreeMQTT.event_queue import get_event_queue
@@ -49,7 +50,7 @@ class GreeMQTTApp:
             if not device_ips:
                 raise ValueError("No valid IPs found in the specified subnet")
 
-        semaphore = asyncio.Semaphore(20)
+        semaphore = asyncio.Semaphore(NETWORK_SCAN_SEMAPHORE_LIMIT)
 
         async def scan_ip(target_ip: str) -> Optional[Device]:
             async with semaphore:
@@ -74,7 +75,7 @@ class GreeMQTTApp:
                         return device
                 except Exception as e:
                     log.error("Error scanning IP", ip=target_ip, error=str(e))
-                if len(device_ips) % 20 == 0:
+                if len(device_ips) % NETWORK_SCAN_LOG_INTERVAL == 0:
                     log.info("Scanned IPs", scanned_ips=len(device_ips))
                 return None
 
@@ -94,13 +95,17 @@ class GreeMQTTApp:
         network = NETWORK.copy() if NETWORK else []
 
         async for device in self.scan_network_for_devices(network):
-            mqtt_client = await create_mqtt_client()
-            await mqtt_client.__aenter__()
+            try:
+                mqtt_client = await create_mqtt_client()
+                await mqtt_client.__aenter__()
 
-            if device.device_ip in network:
-                network.remove(device.device_ip)
-            await start_device_tasks(device, mqtt_client, self.stop_event)
-            log.info("Started device", ip=device.device_ip)
+                if device.device_ip in network:
+                    network.remove(device.device_ip)
+                await start_device_tasks(device, mqtt_client, self.stop_event)
+                log.info("Started device", ip=device.device_ip)
+            except Exception as e:
+                log.error("Failed to setup device", ip=device.device_ip, error=str(e))
+                continue
 
         if network:
             log.warning(

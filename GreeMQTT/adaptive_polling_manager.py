@@ -8,6 +8,10 @@ from GreeMQTT.logger import log
 
 class AdaptivePollingManager:
     def __init__(self, duration_seconds: int, fast_interval: float):
+        if duration_seconds <= 0:
+            raise ValueError("duration_seconds must be positive")
+        if fast_interval <= 0:
+            raise ValueError("fast_interval must be positive")
         self.duration_seconds = duration_seconds
         self.fast_interval = fast_interval
         self._device_states: Dict[str, float] = {}
