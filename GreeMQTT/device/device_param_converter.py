@@ -51,9 +51,6 @@ for KEY in SIMPLE_STATE:
 
 
 class DeviceParamConverter:
-    """
-    Handles conversion between human-readable and device-specific parameter formats.
-    """
 
     @staticmethod
     def to_device(params: Dict[str, Any]) -> Dict[str, Any]:

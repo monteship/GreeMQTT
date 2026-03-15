@@ -17,31 +17,31 @@ from GreeMQTT.config import (
     MQTT_RETAIN,
     UPDATE_INTERVAL,
 )
+from GreeMQTT.constants import DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, DEFAULT_RETRY_BACKOFF, \
+    ERROR_BACKOFF_MAX_ATTEMPTS, ERROR_BACKOFF_BASE_DELAY, CONSECUTIVE_ERROR_RESET_VALUE
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_registry import DeviceRegistry
+from GreeMQTT.event_queue import get_event_queue
 from GreeMQTT.logger import log
 
 device_registry = DeviceRegistry()
 adaptive_polling_manager = AdaptivePollingManager(ADAPTIVE_POLLING_TIMEOUT, ADAPTIVE_FAST_INTERVAL)
+event_queue = get_event_queue()
 
 
 async def interruptible_sleep(duration: float, stop_event: asyncio.Event) -> bool:
-    """Sleep that can be interrupted by stop_event. Returns True if interrupted."""
     try:
         await asyncio.wait_for(stop_event.wait(), timeout=duration)
-        return True  # Interrupted by stop_event
+        return True
     except asyncio.TimeoutError:
-        return False  # Normal timeout
+        return False
 
 
 async def start_device_tasks(
-    device: Device,
-    mqtt_client,
-    stop_event: asyncio.Event,
+        device: Device,
+        mqtt_client,
+        stop_event: asyncio.Event,
 ):
-    """
-    Start async tasks for handling device parameters with instant callback system.
-    """
     asyncio.create_task(device.synchronize_time())
     asyncio.create_task(get_params(device, mqtt_client, stop_event, MQTT_QOS, MQTT_RETAIN))
     asyncio.create_task(
@@ -51,29 +51,28 @@ async def start_device_tasks(
 
 
 async def start_cleanup_task(stop_event: asyncio.Event):
-    """
-    Start cleanup task for adaptive polling manager.
-    """
     asyncio.create_task(cleanup_adaptive_polling_states(stop_event))
 
 
 async def cleanup_adaptive_polling_states(stop_event: asyncio.Event):
-    """
-    Periodically clean up expired adaptive polling states.
-    """
     while not stop_event.is_set():
         await interruptible_sleep(1, stop_event)
         await adaptive_polling_manager.cleanup_expired_states()
 
 
-def async_safe_handle(func: Callable) -> Callable:
-    """Decorator to safely handle async functions with stop_event and log errors with traceback."""
+async def log_event_queue_stats(stop_event: asyncio.Event):
+    while not stop_event.is_set():
+        await interruptible_sleep(60, stop_event)
+        if not stop_event.is_set():
+            stats = event_queue.get_stats()
+            log.info("Event queue statistics", **stats)
 
+
+def async_safe_handle(func: Callable) -> Callable:
     @wraps(func)
     async def wrapper(*args, **kwargs):
         stop_event = kwargs.get("stop_event") or (args[2] if len(args) > 2 else None)
 
-        # Don't start if already shutting down
         if stop_event and stop_event.is_set():
             log.info("Not starting function, shutdown already requested", func=func.__name__)
             return None
@@ -81,7 +80,6 @@ def async_safe_handle(func: Callable) -> Callable:
         try:
             return await func(*args, **kwargs)
         except (MqttError, ConnectionError, OSError) as e:
-            # Don't retry connection errors during shutdown
             if stop_event and stop_event.is_set():
                 log.info(
                     "Connection error during shutdown, exiting gracefully",
@@ -103,7 +101,6 @@ def async_safe_handle(func: Callable) -> Callable:
                 e=e,
                 traceback=traceback.format_exc(),
             )
-            # Don't retry during shutdown
             if stop_event and stop_event.is_set():
                 log.info("Error during shutdown, exiting gracefully", func=func.__name__)
                 return None
@@ -115,13 +112,11 @@ def async_safe_handle(func: Callable) -> Callable:
     return wrapper
 
 
-def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
-    """Decorator to add retry logic with exponential backoff to async functions."""
-
+def with_retries(retries: int = DEFAULT_RETRY_ATTEMPTS, delay: float = DEFAULT_RETRY_DELAY,
+                 backoff: float = DEFAULT_RETRY_BACKOFF):
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Check if stop_event is provided and if it's set
             stop_event = kwargs.get("stop_event") or (
                 args[-1] if len(args) > 0 and hasattr(args[-1], "is_set") else None
             )
@@ -129,7 +124,6 @@ def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
             attempt = 0
             current_delay = delay
             while attempt < retries:
-                # Don't retry if we're shutting down
                 if stop_event and stop_event.is_set():
                     log.info("Shutdown requested, stopping retries", func=func.__name__)
                     return None
@@ -137,7 +131,6 @@ def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
                 try:
                     return await func(*args, **kwargs)
                 except (MqttError, ConnectionError, OSError) as e:
-                    # Don't retry MQTT disconnection errors during shutdown
                     if stop_event and stop_event.is_set():
                         log.info(
                             "Shutdown requested during MQTT error, stopping retries",
@@ -206,41 +199,35 @@ def with_retries(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
 @async_safe_handle
 @with_retries()
 async def get_params(
-    device: Device,
-    mqtt_client: Client,
-    stop_event: asyncio.Event,
-    qos: int,
-    retain: bool,
+        device: Device,
+        mqtt_client: Client,
+        stop_event: asyncio.Event,
+        qos: int,
+        retain: bool,
 ):
-    """Periodically publishes device parameters to the MQTT topic when they change."""
     params_topic = device.topic
     last_params = None
     consecutive_errors = 0
 
     def filter_volatile_fields(_params):
-        """Remove fields that always change (like timestamps) for comparison."""
         if not isinstance(_params, dict):
             return _params
         filtered = _params.copy()
-        # Remove timestamp fields that should not affect change detection
         filtered.pop("last_seen", None)
         return filtered
 
     while not stop_event.is_set():
-        polling_interval = UPDATE_INTERVAL  # Initialize with default value
+        polling_interval = UPDATE_INTERVAL
         try:
             polling_interval = await adaptive_polling_manager.get_polling_interval(device.device_id)
 
-            # Use shorter polling when adaptive polling is active
             if await adaptive_polling_manager.is_adaptive_polling_active(device.device_id):
-                # Even faster polling during first few seconds of adaptive mode
                 elapsed_time = time.time() - (adaptive_polling_manager._device_states.get(device.device_id, 0))
-                if elapsed_time < 10:  # First 10 seconds - ultra-fast polling
+                if elapsed_time < 10:
                     polling_interval = min(polling_interval, 0.5)
 
             params = await device.get_param()
             if params:
-                # Compare only stable parameters, excluding volatile fields
                 params_for_comparison = filter_volatile_fields(params)
 
                 if params_for_comparison != last_params:
@@ -254,7 +241,7 @@ async def get_params(
                         retain=retain,
                     )
                     last_params = params_for_comparison
-                    consecutive_errors = 0  # Reset error counter on success
+                    consecutive_errors = CONSECUTIVE_ERROR_RESET_VALUE
 
             interrupted = await interruptible_sleep(polling_interval, stop_event)
             if interrupted:
@@ -273,8 +260,8 @@ async def get_params(
                 consecutive_errors=consecutive_errors,
             )
 
-            # Exponential backoff on repeated errors, but cap at normal interval
-            error_delay = min(polling_interval, 0.5 * (2 ** min(consecutive_errors, 4)))
+            error_delay = min(polling_interval,
+                              ERROR_BACKOFF_BASE_DELAY * (2 ** min(consecutive_errors, ERROR_BACKOFF_MAX_ATTEMPTS)))
             interrupted = await interruptible_sleep(error_delay, stop_event)
             if interrupted:
                 log.info(
@@ -285,29 +272,22 @@ async def get_params(
 
 
 async def instant_message_handler(message: Message, mqtt_client: Client) -> None:
-    """Instant callback handler that processes messages immediately without queuing."""
     start_time = time.time()
 
     try:
-        # Get device immediately
         device = device_registry.get(str(message.topic))
         if not device:
             log.debug("Unknown topic for instant handler", topic=str(message.topic))
             return
 
-        # Parse JSON payload
         params = json.loads(message.payload.decode("utf-8"))
 
-        # Immediately trigger adaptive polling before device communication
         await adaptive_polling_manager.trigger_adaptive_polling(device.device_id)
 
-        # Set parameters with ultra-low latency
         await device.set_params(params)
 
-        # Force immediate polling for instant feedback
         await adaptive_polling_manager.force_immediate_polling(device.device_id, IMMEDIATE_RESPONSE_TIMEOUT)
 
-        # Get and publish updated state immediately
         current_params = await device.get_param()
         if current_params:
             params_str = json.dumps(current_params, separators=(",", ":"))
@@ -335,24 +315,17 @@ async def instant_message_handler(message: Message, mqtt_client: Client) -> None
 @async_safe_handle
 @with_retries()
 async def subscribe_with_instant_callback(device: Device, mqtt_client: Client, qos: int):
-    """Enhanced subscription with instant callback registration."""
     set_topic = device.set_topic
-
-    # Subscribe to MQTT topic
     await mqtt_client.subscribe(set_topic, qos=qos)
     device_registry.register(set_topic, device)
-
-    # Start instant message processing for this device
     asyncio.create_task(process_device_messages(device, mqtt_client))
 
     log.info("Subscribed with instant callback", topic=set_topic, qos=qos)
 
 
 async def process_device_messages(device: Device, mqtt_client: Client):
-    """Process messages for a specific device instantly."""
     try:
         async for message in mqtt_client.messages:
-            # Check if message is for this device
             if str(message.topic) == device.set_topic:
                 await instant_message_handler(message, mqtt_client)
     except Exception as e:

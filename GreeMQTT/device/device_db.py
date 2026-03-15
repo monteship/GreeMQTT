@@ -3,6 +3,7 @@ import sqlite3
 from typing import List, Optional
 
 from GreeMQTT.device.device import Device
+from GreeMQTT.logger import log
 
 
 def get_project_root():
@@ -19,19 +20,23 @@ class DeviceDB:
         self.init_db()
 
     def init_db(self):
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS devices (
-                device_id TEXT PRIMARY KEY,
-                device_ip TEXT NOT NULL,
-                is_GCM INTEGER NOT NULL,
-                `key` TEXT NOT NULL,
-                seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-        conn.close()
+        try:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS devices (
+                    device_id TEXT PRIMARY KEY,
+                    device_ip TEXT NOT NULL,
+                    is_GCM INTEGER NOT NULL,
+                    `key` TEXT NOT NULL,
+                    seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as e:
+            log.error("Failed to initialize database", db_path=self.db_path, error=str(e))
+            raise
 
     def __enter__(self):
         self.conn = sqlite3.connect(self.db_path)
@@ -94,10 +99,15 @@ class DeviceDB:
             return rows
 
     def update_seen_at(self, device_id: str):
-        with self as conn:
-            c = conn.cursor()
-            c.execute(
-                "UPDATE devices SET seen_at = CURRENT_TIMESTAMP WHERE device_id = ?",
-                (device_id,),
-            )
-            conn.commit()
+        if not device_id:
+            raise ValueError("device_id must not be empty")
+        try:
+            with self as conn:
+                c = conn.cursor()
+                c.execute(
+                    "UPDATE devices SET seen_at = CURRENT_TIMESTAMP WHERE device_id = ?",
+                    (device_id,),
+                )
+                conn.commit()
+        except sqlite3.Error as e:
+            log.error("Failed to update seen_at", device_id=device_id, error=str(e))

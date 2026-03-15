@@ -54,7 +54,7 @@ class ECBEncryptor(Encryptor):
         decryptor = self.create_cipher().decryptor()
         pack_decoded = base64.b64decode(response["pack"])
         pack_decrypted = decryptor.update(pack_decoded) + decryptor.finalize()
-        pack_unpadded = pack_decrypted[0 : pack_decrypted.rfind(b"}") + 1]
+        pack_unpadded = pack_decrypted[0: pack_decrypted.rfind(b"}") + 1]
         return json.loads(pack_unpadded.decode("utf-8"))
 
 

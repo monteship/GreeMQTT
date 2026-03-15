@@ -79,18 +79,20 @@ class DeviceCommunicator:
                 on_con_lost.set_result(False)
                 self.transport.close()
 
-        if is_broadcast:
-            # For broadcast, bind to any local address
-            transport, protocol = await loop.create_datagram_endpoint(
-                lambda: UDPScanProtocol(),
-                local_addr=("0.0.0.0", 0),
-            )
-        else:
-            # For specific IP, use direct connection
-            transport, protocol = await loop.create_datagram_endpoint(
-                lambda: UDPScanProtocol(),
-                remote_addr=(target_ip, udp_port),
-            )
+        try:
+            if is_broadcast:
+                transport, protocol = await loop.create_datagram_endpoint(
+                    lambda: UDPScanProtocol(),
+                    local_addr=("0.0.0.0", 0),
+                )
+            else:
+                transport, protocol = await loop.create_datagram_endpoint(
+                    lambda: UDPScanProtocol(),
+                    remote_addr=(target_ip, udp_port),
+                )
+        except (OSError, ConnectionError) as e:
+            log.error("Failed to create scan endpoint", target_ip=target_ip, error=str(e))
+            return None
 
         try:
             await asyncio.wait_for(on_con_lost, timeout=SOCKET_TIMEOUT)

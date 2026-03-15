@@ -1,13 +1,32 @@
-FROM python:3.13-slim
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+ENV UV_COMPILE_BYTECODE=1
+
+ENV UV_LINK_MODE=copy
+
+ENV UV_NO_DEV=1
+
+ENV UV_TOOL_BIN_DIR=/usr/local/bin
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     build-essential \
+    gcc \
     libffi-dev \
+    libssl-dev \
     python3-dev \
-    && rm -rf /var/lib/apt/lists/*
+    pkg-config \
+    rustc \
+    cargo && \
+    rm -rf /var/lib/apt/lists/*
+
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project
 
 # Copy project files
 COPY pyproject.toml uv.lock /app/
@@ -15,16 +34,10 @@ RUN pip install uv
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY GreeMQTT /app/GreeMQTT/
-COPY healthcheck.py /app/healthcheck.py
 
-# For testing purposes, uncomment the following lines to set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    LOG_LEVEL=INFO
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH="/app:$PYTHONPATH"
 
-
-# Health check to monitor container health
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python /app/healthcheck.py || exit 1
 
 CMD ["uv", "run", "GreeMQTT"]

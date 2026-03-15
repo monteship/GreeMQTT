@@ -4,6 +4,7 @@ import re
 from typing import Dict, Optional, Self
 
 from GreeMQTT.config import MQTT_TOPIC
+from GreeMQTT.constants import DEVICE_BIND_MAX_RETRIES
 from GreeMQTT.device.device_command_builder import DeviceCommandBuilder
 from GreeMQTT.device.device_communication import DeviceCommunicator
 from GreeMQTT.device.device_encryption import DeviceEncryptor
@@ -54,7 +55,7 @@ class Device:
     async def _send_data(self, request: bytes) -> Optional[bytes]:
         return await self.communicator.send_data(request)
 
-    async def bind(self, max_retries: int = 2) -> Optional[Self]:
+    async def bind(self, max_retries: int = DEVICE_BIND_MAX_RETRIES) -> Optional[Self]:
         log.info("Binding to device", device=self.device_id)
         retries = 0
         while retries < max_retries:
@@ -174,7 +175,11 @@ class Device:
         if not result:
             return None
         raw_json = result[: result.rfind(b"}") + 1]
-        response = json.loads(raw_json)
+        try:
+            response = json.loads(raw_json)
+        except json.JSONDecodeError as e:
+            log.error("Failed to parse search response", ip_address=ip_address, error=str(e))
+            return None
         is_GCM = "tag" in response
         encryptor = DeviceEncryptor(is_GCM=is_GCM)
         decrypted_response = encryptor.decrypt(response)
