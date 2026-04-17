@@ -8,7 +8,7 @@ from ipaddress import IPv4Address
 from typing import Optional
 
 from GreeMQTT import device_db
-from GreeMQTT.config import NETWORK
+from GreeMQTT.config import settings
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_communication import DeviceCommunicator
 from GreeMQTT.logger import log
@@ -73,7 +73,7 @@ class GreeMQTTApp:
                     log.error("Scan error", error=str(e))
 
     def discover_and_setup_devices(self):
-        remaining = NETWORK.copy() if NETWORK else []
+        remaining = settings.network_list.copy() if settings.network_list else []
         mqtt_client = create_mqtt_client()
 
         for device in self.scan_for_devices(remaining):

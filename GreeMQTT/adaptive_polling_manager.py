@@ -2,7 +2,7 @@ import threading
 import time
 from typing import Dict
 
-from GreeMQTT.config import UPDATE_INTERVAL
+from GreeMQTT.config import settings
 from GreeMQTT.logger import log
 
 
@@ -31,7 +31,7 @@ class AdaptivePollingManager:
     def get_polling_interval(self, device_id: str) -> float:
         with self._lock:
             if device_id not in self._device_states:
-                return UPDATE_INTERVAL
+                return settings.update_interval
 
             trigger_time = self._device_states[device_id]
             current_time = time.time()
@@ -44,9 +44,9 @@ class AdaptivePollingManager:
                 log.debug(
                     "Adaptive polling expired, returning to normal",
                     device_id=device_id,
-                    normal_interval=UPDATE_INTERVAL,
+                    normal_interval=settings.update_interval,
                 )
-                return UPDATE_INTERVAL
+                return settings.update_interval
 
     def is_adaptive_polling_active(self, device_id: str) -> bool:
         interval = self.get_polling_interval(device_id)

@@ -6,13 +6,7 @@ from typing import Optional
 import paho.mqtt.client as paho_mqtt
 
 from GreeMQTT.adaptive_polling_manager import AdaptivePollingManager
-from GreeMQTT.config import (
-    ADAPTIVE_FAST_INTERVAL,
-    ADAPTIVE_POLLING_TIMEOUT,
-    IMMEDIATE_RESPONSE_TIMEOUT,
-    MQTT_QOS,
-    MQTT_RETAIN,
-)
+from GreeMQTT.config import settings
 from GreeMQTT.device.device import Device
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import subscribe_topic
@@ -21,7 +15,7 @@ from GreeMQTT.mqtt_client import subscribe_topic
 _device_registry: dict[str, Device] = {}
 _registry_lock = threading.Lock()
 
-adaptive_polling_manager = AdaptivePollingManager(ADAPTIVE_POLLING_TIMEOUT, ADAPTIVE_FAST_INTERVAL)
+adaptive_polling_manager = AdaptivePollingManager(settings.adaptive_polling_timeout, settings.adaptive_fast_interval)
 
 ERROR_BACKOFF_BASE = 0.5
 ERROR_BACKOFF_MAX_EXPONENT = 4
@@ -47,7 +41,7 @@ def start_device_tasks(
     with _registry_lock:
         _device_registry[set_topic] = device
 
-    subscribe_topic(set_topic, qos=MQTT_QOS)
+    subscribe_topic(set_topic, qos=settings.mqtt_qos)
     mqtt_client.on_message = _on_mqtt_message
 
     log.info("Started tasks for device", device=str(device), topic=set_topic)
@@ -88,7 +82,7 @@ def _poll_device_params(
                 comparable = {k: v for k, v in params.items() if k != "last_seen"}
                 if comparable != last_params:
                     params_str = json.dumps(params, separators=(",", ":"))
-                    mqtt_client.publish(params_topic, params_str, qos=MQTT_QOS, retain=MQTT_RETAIN)
+                    mqtt_client.publish(params_topic, params_str, qos=settings.mqtt_qos, retain=settings.mqtt_retain)
                     log.debug("Publishing params", topic=params_topic, params=params_str)
                     last_params = comparable
                 consecutive_errors = 0
@@ -134,12 +128,12 @@ def _on_mqtt_message(client, userdata, msg) -> None:
 
         adaptive_polling_manager.trigger_adaptive_polling(device.device_id)
         device.set_params(params)
-        adaptive_polling_manager.force_immediate_polling(device.device_id, IMMEDIATE_RESPONSE_TIMEOUT)
+        adaptive_polling_manager.force_immediate_polling(device.device_id, settings.immediate_response_timeout)
 
         current_params = device.get_param()
         if current_params:
             params_str = json.dumps(current_params, separators=(",", ":"))
-            client.publish(device.topic, params_str, qos=MQTT_QOS, retain=MQTT_RETAIN)
+            client.publish(device.topic, params_str, qos=settings.mqtt_qos, retain=settings.mqtt_retain)
 
         log.debug("Command processed", device_id=device.device_id, topic=msg.topic)
 

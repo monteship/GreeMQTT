@@ -3,7 +3,7 @@ import json
 import re
 from typing import Dict, Optional, Self
 
-from GreeMQTT.config import MQTT_TOPIC, TRACKING_PARAMS
+from GreeMQTT.config import settings
 from GreeMQTT.device.device_communication import DeviceCommunicator
 from GreeMQTT.device.device_param_converter import DeviceParamConverter
 from GreeMQTT.encryptor import decrypt, encrypt
@@ -30,7 +30,7 @@ class Device:
 
     @property
     def topic(self) -> str:
-        return f"{MQTT_TOPIC}/{self.device_id}"
+        return f"{settings.mqtt_topic}/{self.device_id}"
 
     @property
     def set_topic(self) -> str:
@@ -99,7 +99,7 @@ class Device:
     def get_param(self) -> Optional[Dict]:
         from GreeMQTT import device_db
 
-        cols = ",".join(f'"{p}"' for p in TRACKING_PARAMS)
+        cols = ",".join(f'"{p}"' for p in settings.tracking_params_list)
         status_pack = f'{{"cols":[{cols}],"mac":"{self.device_id}","t":"status"}}'
         request = self._encrypt_request(status_pack)
         result = self._send(request.encode())

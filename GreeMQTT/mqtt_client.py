@@ -2,15 +2,7 @@ import threading
 
 import paho.mqtt.client as paho_mqtt
 
-from GreeMQTT.config import (
-    MQTT_BROKER,
-    MQTT_KEEP_ALIVE,
-    MQTT_PASSWORD,
-    MQTT_PORT,
-    MQTT_QOS,
-    MQTT_TOPIC,
-    MQTT_USER,
-)
+from GreeMQTT.config import settings
 from GreeMQTT.logger import log
 
 _mqtt_client: paho_mqtt.Client | None = None
@@ -22,8 +14,8 @@ RECONNECT_DELAY_MAX = 60
 
 def _on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
-        log.info("MQTT connected", broker=MQTT_BROKER, port=MQTT_PORT)
-        client.publish(f"{MQTT_TOPIC}/status", "online", qos=MQTT_QOS, retain=True)
+        log.info("MQTT connected", broker=settings.mqtt_broker, port=settings.mqtt_port)
+        client.publish(f"{settings.mqtt_topic}/status", "online", qos=settings.mqtt_qos, retain=True)
         # Re-subscribe to all previously subscribed topics
         for topic, qos in getattr(client, "_subscribed_topics", {}).items():
             client.subscribe(topic, qos=qos)
@@ -51,22 +43,22 @@ def create_mqtt_client() -> paho_mqtt.Client:
         client.on_disconnect = _on_disconnect
 
         client.will_set(
-            topic=f"{MQTT_TOPIC}/status",
+            topic=f"{settings.mqtt_topic}/status",
             payload="offline",
-            qos=MQTT_QOS,
+            qos=settings.mqtt_qos,
             retain=True,
         )
-        if MQTT_USER and MQTT_PASSWORD:
-            client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+        if settings.mqtt_user and settings.mqtt_password:
+            client.username_pw_set(settings.mqtt_user, settings.mqtt_password)
 
         client.reconnect_delay_set(RECONNECT_DELAY_MIN, RECONNECT_DELAY_MAX)
-        client.connect(MQTT_BROKER, MQTT_PORT, MQTT_KEEP_ALIVE)
+        client.connect(settings.mqtt_broker, settings.mqtt_port, settings.mqtt_keep_alive)
         client.loop_start()
         _mqtt_client = client
         return _mqtt_client
 
 
-def subscribe_topic(topic: str, qos: int = MQTT_QOS):
+def subscribe_topic(topic: str, qos: int = settings.mqtt_qos):
     """Subscribe and track the topic for automatic re-subscription on reconnect."""
     client = create_mqtt_client()
     client._subscribed_topics[topic] = qos
@@ -79,7 +71,7 @@ def shutdown_mqtt():
     with _mqtt_lock:
         if _mqtt_client is not None:
             try:
-                _mqtt_client.publish(f"{MQTT_TOPIC}/status", "offline", qos=MQTT_QOS, retain=True)
+                _mqtt_client.publish(f"{settings.mqtt_topic}/status", "offline", qos=settings.mqtt_qos, retain=True)
                 _mqtt_client.loop_stop()
                 _mqtt_client.disconnect()
                 log.info("MQTT client disconnected gracefully")
