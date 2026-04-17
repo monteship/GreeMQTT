@@ -12,7 +12,7 @@ keywords = ["gree", "mqtt", "home-assistant"]
 requires-python = ">=3.13"
 dependencies = [
     "structlog>=25.3.0",
-    "aiomqtt>=2.4.0",
+    "paho-mqtt>=2.0.0",
     "python-dotenv>=1.1.0",
     "crypto>=1.4.1",
     "pycryptodome>=3.22.0",

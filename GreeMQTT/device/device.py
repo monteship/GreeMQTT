@@ -52,15 +52,15 @@ class Device:
             return pack_decrypted
         return dict(zip(pack_decrypted["cols"], pack_decrypted["dat"]))
 
-    async def _send_data(self, request: bytes) -> Optional[bytes]:
-        return await self.communicator.send_data(request)
+    def _send_data(self, request: bytes) -> Optional[bytes]:
+        return self.communicator.send_data(request)
 
-    async def bind(self, max_retries: int = DEVICE_BIND_MAX_RETRIES) -> Optional[Self]:
+    def bind(self, max_retries: int = DEVICE_BIND_MAX_RETRIES) -> Optional[Self]:
         log.info("Binding to device", device=self.device_id)
         retries = 0
         while retries < max_retries:
             request = self._bind_request(1)
-            result = await self._send_data(request)
+            result = self._send_data(request)
             log.debug(
                 "Bind request sent",
                 device_id=self.device_id,
@@ -120,11 +120,11 @@ class Device:
         request.update(pack_encrypted)
         return json.dumps(request).encode()
 
-    async def get_param(self) -> Optional[Dict]:
+    def get_param(self) -> Optional[Dict]:
         from GreeMQTT.__main__ import device_db
 
         request = self.encrypt_request(DeviceCommandBuilder.status(self.device_id))
-        result = await self._send_data(request.encode())
+        result = self._send_data(request.encode())
         if not result:
             log.error("Failed to get parameters from device", device_id=self.device_id)
             return None
@@ -135,13 +135,13 @@ class Device:
             return DeviceParamConverter.from_device(params)
         return {}
 
-    async def set_params(self, params: dict) -> dict[str, str | int] | None:
+    def set_params(self, params: dict) -> dict[str, str | int] | None:
         from GreeMQTT.__main__ import device_db
 
         params = DeviceParamConverter.to_device(params)
         pack = DeviceCommandBuilder.set_params(params)
         request = self.encrypt_request(pack)
-        result = await self._send_data(request.encode())
+        result = self._send_data(request.encode())
         if result:
             response = json.loads(result)
             if response["t"] == "pack":
@@ -150,9 +150,9 @@ class Device:
             return None
         return None
 
-    async def synchronize_time(self) -> None:
+    def synchronize_time(self) -> None:
         current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        response = await self.set_params({"time": current_time})
+        response = self.set_params({"time": current_time})
         if response is not None:
             log.info(
                 "Synchronized time with device",
@@ -169,9 +169,9 @@ class Device:
         return DeviceCommandBuilder.status(self.device_id)
 
     @classmethod
-    async def search_devices(cls, ip_address=None) -> Optional[Self]:
+    def search_devices(cls, ip_address=None) -> Optional[Self]:
         log.info("Searching for devices using broadcast address", ip_address=ip_address)
-        result = await DeviceCommunicator.broadcast_scan(ip_address)
+        result = DeviceCommunicator.broadcast_scan(ip_address)
         if not result:
             return None
         raw_json = result[: result.rfind(b"}") + 1]
@@ -186,7 +186,6 @@ class Device:
         name = decrypted_response.get("name", "Unknown")
         cid = decrypted_response.get("cid", response.get("cid"))
         if not cid:
-            # Some Air Conditioners may not return cid in the response example `V3.0.0`
             cid = decrypted_response.get("mac")
         if not cid:
             log.error("Device ID (cid) not found in response", response=decrypted_response)
@@ -202,4 +201,4 @@ class Device:
             name=name,
             is_GCM=is_GCM,
         )
-        return await device.bind()
+        return device.bind()

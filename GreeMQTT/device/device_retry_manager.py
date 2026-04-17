@@ -1,4 +1,4 @@
-import asyncio
+import threading
 from typing import List
 
 from GreeMQTT import device_db
@@ -10,21 +10,20 @@ from GreeMQTT.mqtt_handler import interruptible_sleep, start_device_tasks
 
 
 class DeviceRetryManager:
-    def __init__(self, missing_devices: List[str], stop_event: asyncio.Event):
+    def __init__(self, missing_devices: List[str], stop_event: threading.Event):
         self.missing_devices = missing_devices
         self.stop_event = stop_event
 
-    async def run(self):
+    def run(self):
         while not self.stop_event.is_set():
             for device_ip in self.missing_devices.copy():
                 try:
-                    device = await Device.search_devices(device_ip)
+                    device = Device.search_devices(device_ip)
                     if device and device.key:
                         log.info("New device found", device=str(device))
                         device_db.save_device(device.device_id, device.device_ip, device.key, device.is_GCM)
-                        mqtt_client = await create_mqtt_client()
-                        await mqtt_client.__aenter__()
-                        await start_device_tasks(device, mqtt_client, self.stop_event)
+                        mqtt_client = create_mqtt_client()
+                        start_device_tasks(device, mqtt_client, self.stop_event)
                         self.missing_devices.remove(device_ip)
                 except ValueError as e:
                     log.error("Invalid device data during retry", device_ip=device_ip, error=str(e))
@@ -33,7 +32,7 @@ class DeviceRetryManager:
             if not self.missing_devices:
                 log.info("Retry manager finished, all devices found.")
                 break
-            interrupted = await interruptible_sleep(RETRY_MANAGER_SLEEP_DURATION, self.stop_event)
+            interrupted = interruptible_sleep(RETRY_MANAGER_SLEEP_DURATION, self.stop_event)
             if interrupted:
                 log.info("Device retry manager interrupted during sleep")
                 break

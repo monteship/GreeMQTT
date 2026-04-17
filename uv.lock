@@ -3,18 +3,6 @@ revision = 3
 requires-python = ">=3.13"
 
 [[package]]
-name = "aiomqtt"
-version = "2.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "paho-mqtt" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/45/9a/863bc34c64bc4acb9720a9950bfc77d6f324640cdf1f420bb5d9ee624975/aiomqtt-2.4.0.tar.gz", hash = "sha256:ab0f18fc5b7ffaa57451c407417d674db837b00a9c7d953cccd02be64f046c17", size = 82718, upload-time = "2025-05-03T20:21:27.748Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/98/0c/2720665998d97d3a9521c03b138a22247e035ba54c4738e934da33c68699/aiomqtt-2.4.0-py3-none-any.whl", hash = "sha256:721296e2b79df5f6c7c4dfc91700ae0166953a4127735c92637859619dbd84e4", size = 15908, upload-time = "2025-05-03T20:21:26.337Z" },
-]
-
-[[package]]
 name = "certifi"
 version = "2025.8.3"
 source = { registry = "https://pypi.org/simple" }
@@ -135,12 +123,12 @@ wheels = [
 
 [[package]]
 name = "greemqtt"
-version = "1.5.5"
+version = "1.6.1"
 source = { editable = "." }
 dependencies = [
-    { name = "aiomqtt" },
     { name = "crypto" },
     { name = "cryptography" },
+    { name = "paho-mqtt" },
     { name = "pycryptodome" },
     { name = "python-dotenv" },
     { name = "structlog" },
@@ -149,9 +137,9 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiomqtt", specifier = ">=2.4.0" },
     { name = "crypto", specifier = ">=1.4.1" },
     { name = "cryptography", specifier = ">=44.0.3" },
+    { name = "paho-mqtt", specifier = ">=2.0.0" },
     { name = "pycryptodome", specifier = ">=3.22.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "structlog", specifier = ">=25.3.0" },

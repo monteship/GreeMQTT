@@ -1,4 +1,5 @@
-import asyncio
+import queue
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -27,35 +28,36 @@ class Event:
 class InternalEventQueue:
     def __init__(self, max_workers: int = 5):
         self.max_workers = max_workers
-        self.queue = asyncio.PriorityQueue()
-        self.workers: list[asyncio.Task] = []
-        self.stop_event = asyncio.Event()
+        self.queue: queue.PriorityQueue = queue.PriorityQueue()
+        self.workers: list[threading.Thread] = []
+        self.stop_event = threading.Event()
         self.stats = {
             "processed": 0,
             "errors": 0,
             "processing_times": [],
         }
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()
 
-    async def start(self):
+    def start(self):
         log.info("Starting internal event queue", workers=self.max_workers)
 
         for i in range(self.max_workers):
-            worker = asyncio.create_task(self._worker(i))
+            worker = threading.Thread(target=self._worker, args=(i,), daemon=True)
+            worker.start()
             self.workers.append(worker)
 
         log.info("Event queue workers started", count=len(self.workers))
 
-    async def stop(self):
+    def stop(self):
         log.info("Stopping internal event queue")
         self.stop_event.set()
 
-        if self.workers:
-            await asyncio.gather(*self.workers, return_exceptions=True)
+        for worker in self.workers:
+            worker.join(timeout=5.0)
 
         log.info("Event queue stopped", stats=self.get_stats())
 
-    async def enqueue(
+    def enqueue(
             self,
             event_type: str,
             device_id: Optional[str] = None,
@@ -72,7 +74,7 @@ class InternalEventQueue:
             callback=callback,
         )
 
-        await self.queue.put(event)
+        self.queue.put(event)
 
         log.debug(
             "Event enqueued",
@@ -82,25 +84,22 @@ class InternalEventQueue:
             queue_size=self.queue.qsize(),
         )
 
-    async def _worker(self, worker_id: int):
+    def _worker(self, worker_id: int):
         log.info("Event queue worker started", worker_id=worker_id)
 
         while not self.stop_event.is_set():
             try:
-                event = await asyncio.wait_for(self.queue.get(), timeout=1.0)
+                event = self.queue.get(timeout=1.0)
 
                 start_time = time.time()
 
                 try:
                     if event.callback:
-                        if asyncio.iscoroutinefunction(event.callback):
-                            await event.callback(event.data)
-                        else:
-                            event.callback(event.data)
+                        event.callback(event.data)
 
                     processing_time = time.time() - start_time
 
-                    async with self._lock:
+                    with self._lock:
                         self.stats["processed"] += 1
                         self.stats["processing_times"].append(processing_time)
 
@@ -116,7 +115,7 @@ class InternalEventQueue:
                     )
 
                 except Exception as e:
-                    async with self._lock:
+                    with self._lock:
                         self.stats["errors"] += 1
 
                     log.error(
@@ -130,7 +129,7 @@ class InternalEventQueue:
                 finally:
                     self.queue.task_done()
 
-            except asyncio.TimeoutError:
+            except queue.Empty:
                 continue
             except Exception as e:
                 log.error("Worker error", worker_id=worker_id, error=str(e))
@@ -146,14 +145,14 @@ class InternalEventQueue:
             stats["avg_processing_time_ms"] = 0.0
 
         stats["queue_size"] = self.queue.qsize()
-        stats["active_workers"] = len([w for w in self.workers if not w.done()])
+        stats["active_workers"] = len([w for w in self.workers if w.is_alive()])
 
         del stats["processing_times"]
 
         return stats
 
-    async def wait_empty(self):
-        await self.queue.join()
+    def wait_empty(self):
+        self.queue.join()
 
 
 _queue_instance: Optional[InternalEventQueue] = None

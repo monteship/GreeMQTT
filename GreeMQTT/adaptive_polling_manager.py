@@ -1,4 +1,4 @@
-import asyncio
+import threading
 import time
 from typing import Dict
 
@@ -15,10 +15,10 @@ class AdaptivePollingManager:
         self.duration_seconds = duration_seconds
         self.fast_interval = fast_interval
         self._device_states: Dict[str, float] = {}
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()
 
-    async def trigger_adaptive_polling(self, device_id: str) -> None:
-        async with self._lock:
+    def trigger_adaptive_polling(self, device_id: str) -> None:
+        with self._lock:
             current_time = time.time()
             self._device_states[device_id] = current_time
             log.debug(
@@ -28,8 +28,8 @@ class AdaptivePollingManager:
                 fast_interval=self.fast_interval,
             )
 
-    async def get_polling_interval(self, device_id: str) -> float:
-        async with self._lock:
+    def get_polling_interval(self, device_id: str) -> float:
+        with self._lock:
             if device_id not in self._device_states:
                 return UPDATE_INTERVAL
 
@@ -48,12 +48,12 @@ class AdaptivePollingManager:
                 )
                 return UPDATE_INTERVAL
 
-    async def is_adaptive_polling_active(self, device_id: str) -> bool:
-        interval = await self.get_polling_interval(device_id)
+    def is_adaptive_polling_active(self, device_id: str) -> bool:
+        interval = self.get_polling_interval(device_id)
         return interval == self.fast_interval
 
-    async def cleanup_expired_states(self) -> None:
-        async with self._lock:
+    def cleanup_expired_states(self) -> None:
+        with self._lock:
             current_time = time.time()
             expired_devices = []
 
@@ -65,8 +65,8 @@ class AdaptivePollingManager:
                 del self._device_states[device_id]
                 log.debug("Cleaned up expired adaptive polling state", device_id=device_id)
 
-    async def force_immediate_polling(self, device_id: str, duration: float = 5.0) -> None:
-        async with self._lock:
+    def force_immediate_polling(self, device_id: str, duration: float = 5.0) -> None:
+        with self._lock:
             current_time = time.time()
             self._device_states[device_id] = current_time
 
