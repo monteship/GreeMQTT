@@ -12,7 +12,7 @@ from GreeMQTT.config import NETWORK
 from GreeMQTT.device.device import Device
 from GreeMQTT.device.device_communication import DeviceCommunicator
 from GreeMQTT.logger import log
-from GreeMQTT.mqtt_client import create_mqtt_client
+from GreeMQTT.mqtt_client import create_mqtt_client, shutdown_mqtt
 from GreeMQTT.mqtt_handler import start_cleanup_task, start_device_tasks
 
 SCAN_WORKERS = 20
@@ -74,10 +74,10 @@ class GreeMQTTApp:
 
     def discover_and_setup_devices(self):
         remaining = NETWORK.copy() if NETWORK else []
+        mqtt_client = create_mqtt_client()
 
         for device in self.scan_for_devices(remaining):
             try:
-                mqtt_client = create_mqtt_client()
                 if device.device_ip in remaining:
                     remaining.remove(device.device_ip)
                 start_device_tasks(device, mqtt_client, self.stop_event)
@@ -87,10 +87,13 @@ class GreeMQTTApp:
 
         if remaining:
             log.warning("Some devices were not found", missing=remaining)
-            self._retry_missing(remaining)
+            self._retry_missing(remaining, mqtt_client)
 
-    def _retry_missing(self, missing: list[str]):
+    def _retry_missing(self, missing: list[str], mqtt_client=None):
         from GreeMQTT.mqtt_handler import interruptible_sleep
+
+        if mqtt_client is None:
+            mqtt_client = create_mqtt_client()
 
         while not self.stop_event.is_set() and missing:
             for ip in missing.copy():
@@ -99,7 +102,6 @@ class GreeMQTTApp:
                     if device and device.key:
                         log.info("New device found", device=str(device))
                         device_db.save_device(device.device_id, device.device_ip, device.key, device.is_GCM)
-                        mqtt_client = create_mqtt_client()
                         start_device_tasks(device, mqtt_client, self.stop_event)
                         missing.remove(ip)
                 except Exception as e:
@@ -121,6 +123,11 @@ class GreeMQTTApp:
             self.stop_event.wait()
         except Exception as e:
             log.error("Application error", error=str(e))
+        finally:
+            log.info("Shutting down...")
+            self.stop_event.set()
+            shutdown_mqtt()
+            log.info("Shutdown complete")
 
 
 def main():

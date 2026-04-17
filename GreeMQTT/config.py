@@ -40,7 +40,9 @@ def env_list(key: str, default: list | None = None, sep: str = ",") -> list[str]
 NETWORK: list[str] = env_list("NETWORK")
 
 # --- MQTT ---
-MQTT_BROKER: str | None = env("MQTT_BROKER")
+MQTT_BROKER: str = env("MQTT_BROKER")
+if not MQTT_BROKER:
+    raise ValueError("MQTT_BROKER environment variable is required.")
 MQTT_PORT: int = env("MQTT_PORT", default=1883, cast=int)
 MQTT_USER: str | None = env("MQTT_USER")
 MQTT_PASSWORD: str | None = env("MQTT_PASSWORD")

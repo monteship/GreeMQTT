@@ -12,13 +12,14 @@ from GreeMQTT.config import (
     IMMEDIATE_RESPONSE_TIMEOUT,
     MQTT_QOS,
     MQTT_RETAIN,
-    UPDATE_INTERVAL,
 )
 from GreeMQTT.device.device import Device
 from GreeMQTT.logger import log
+from GreeMQTT.mqtt_client import subscribe_topic
 
-# Simple topic -> device lookup
+# Thread-safe device registry
 _device_registry: dict[str, Device] = {}
+_registry_lock = threading.Lock()
 
 adaptive_polling_manager = AdaptivePollingManager(ADAPTIVE_POLLING_TIMEOUT, ADAPTIVE_FAST_INTERVAL)
 
@@ -43,8 +44,10 @@ def start_device_tasks(
     ).start()
 
     set_topic = device.set_topic
-    _device_registry[set_topic] = device
-    mqtt_client.subscribe(set_topic, qos=MQTT_QOS)
+    with _registry_lock:
+        _device_registry[set_topic] = device
+
+    subscribe_topic(set_topic, qos=MQTT_QOS)
     mqtt_client.on_message = _on_mqtt_message
 
     log.info("Started tasks for device", device=str(device), topic=set_topic)
@@ -88,7 +91,11 @@ def _poll_device_params(
                     mqtt_client.publish(params_topic, params_str, qos=MQTT_QOS, retain=MQTT_RETAIN)
                     log.debug("Publishing params", topic=params_topic, params=params_str)
                     last_params = comparable
-                    consecutive_errors = 0
+                consecutive_errors = 0
+            else:
+                consecutive_errors += 1
+                log.warning("No params returned from device", device_id=device.device_id,
+                            consecutive_errors=consecutive_errors)
 
         except Exception as e:
             consecutive_errors += 1
@@ -109,12 +116,22 @@ def _poll_device_params(
 
 def _on_mqtt_message(client, userdata, msg) -> None:
     try:
-        device = _device_registry.get(msg.topic)
+        with _registry_lock:
+            device = _device_registry.get(msg.topic)
         if not device:
             log.debug("Unknown topic", topic=msg.topic)
             return
 
-        params = json.loads(msg.payload.decode("utf-8"))
+        payload = msg.payload.decode("utf-8").strip()
+        if not payload:
+            log.debug("Empty payload ignored", topic=msg.topic)
+            return
+
+        params = json.loads(payload)
+        if not isinstance(params, dict):
+            log.error("Payload is not a JSON object", topic=msg.topic)
+            return
+
         adaptive_polling_manager.trigger_adaptive_polling(device.device_id)
         device.set_params(params)
         adaptive_polling_manager.force_immediate_polling(device.device_id, IMMEDIATE_RESPONSE_TIMEOUT)

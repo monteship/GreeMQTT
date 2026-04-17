@@ -97,7 +97,7 @@ class Device:
         return None
 
     def get_param(self) -> Optional[Dict]:
-        from GreeMQTT.__main__ import device_db
+        from GreeMQTT import device_db
 
         cols = ",".join(f'"{p}"' for p in TRACKING_PARAMS)
         status_pack = f'{{"cols":[{cols}],"mac":"{self.device_id}","t":"status"}}'
@@ -114,7 +114,7 @@ class Device:
         return {}
 
     def set_params(self, params: dict) -> dict[str, str | int] | None:
-        from GreeMQTT.__main__ import device_db
+        from GreeMQTT import device_db
 
         converted = DeviceParamConverter.to_device(params)
         pack = json.dumps({"opt": list(converted.keys()), "p": list(converted.values()), "t": "cmd"})
