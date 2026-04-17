@@ -12,15 +12,15 @@ if isinstance(NETWORK, str):
     NETWORK = [net.strip() for net in NETWORK.split(",") if net.strip()]
 
 MQTT_BROKER: str = os.getenv("MQTT_BROKER")
-MQTT_PORT: int = os.getenv("MQTT_PORT", 1883)
+MQTT_PORT: int = int(os.getenv("MQTT_PORT", 1883))
 MQTT_USER: str = os.getenv("MQTT_USER")
 MQTT_PASSWORD: str = os.getenv("MQTT_PASSWORD")
 MQTT_TOPIC: str = os.getenv("MQTT_TOPIC", "gree")
-MQTT_QOS: int = os.getenv("MQTT_QOS", 0)
+MQTT_QOS: int = int(os.getenv("MQTT_QOS", 0))
 if MQTT_QOS not in [0, 1, 2]:
     raise ValueError("MQTT_QOS environment variable must be 0, 1, or 2.")
 MQTT_RETAIN: bool = os.getenv("MQTT_RETAIN", 'False').lower() in ['true', '1', 'yes']
-MQTT_KEEP_ALIVE: int = os.getenv("MQTT_KEEP_ALIVE", 60)
+MQTT_KEEP_ALIVE: int = int(os.getenv("MQTT_KEEP_ALIVE", 60))
 
 log.debug(
     "Initialized MQTT with",
@@ -34,12 +34,12 @@ log.debug(
     keep_alive=MQTT_KEEP_ALIVE,
 )
 
-UPDATE_INTERVAL: int = os.getenv("UPDATE_INTERVAL", 3)
-ADAPTIVE_POLLING_TIMEOUT: int = os.getenv("ADAPTIVE_POLLING_TIMEOUT", 45)
-ADAPTIVE_FAST_INTERVAL: float = os.getenv("ADAPTIVE_FAST_INTERVAL", 0.8)
+UPDATE_INTERVAL: int = int(os.getenv("UPDATE_INTERVAL", 3))
+ADAPTIVE_POLLING_TIMEOUT: int = int(os.getenv("ADAPTIVE_POLLING_TIMEOUT", 45))
+ADAPTIVE_FAST_INTERVAL: float = float(os.getenv("ADAPTIVE_FAST_INTERVAL", 0.8))
 
-EVENT_QUEUE_WORKERS: int = os.getenv("EVENT_QUEUE_WORKERS", 5)
-IMMEDIATE_RESPONSE_TIMEOUT: float = os.getenv("IMMEDIATE_RESPONSE_TIMEOUT", 5.0)
+EVENT_QUEUE_WORKERS: int = int(os.getenv("EVENT_QUEUE_WORKERS", 5))
+IMMEDIATE_RESPONSE_TIMEOUT: float = float(os.getenv("IMMEDIATE_RESPONSE_TIMEOUT", 5.0))
 
 DEFAULT_PARAMS = (
     "Pow,Mod,SetTem,TemUn,WdSpd,Air,Blo,Health,SwhSlp,Lig,SwingLfRig,"

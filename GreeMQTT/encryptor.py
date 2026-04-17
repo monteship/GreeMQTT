@@ -2,9 +2,8 @@ import base64
 import json
 from typing import Any, Dict, Optional
 
-from Crypto.Cipher import AES
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from Cryptodome.Cipher import AES
+
 
 GENERIC_KEY = "a3K8Bx%2r8Y7#xDh"
 GENERIC_GCM_KEY = "{yxAHAY_Lm6pbC/<"
@@ -31,11 +30,7 @@ class ECBEncryptor(Encryptor):
         super().__init__(key or GENERIC_KEY)
 
     def create_cipher(self) -> Any:
-        return Cipher(
-            algorithms.AES(self.key.encode("utf-8")),
-            modes.ECB(),
-            backend=default_backend(),
-        )
+        return AES.new(self.key.encode("utf-8"), AES.MODE_ECB)
 
     @staticmethod
     def add_pkcs7_padding(data) -> str:
@@ -44,16 +39,16 @@ class ECBEncryptor(Encryptor):
         return padded
 
     def encrypt(self, pack: str) -> Dict:
-        encryptor = self.create_cipher().encryptor()
+        cipher = self.create_cipher()
         pack_padded = self.add_pkcs7_padding(pack)
-        pack_encrypted = encryptor.update(bytes(pack_padded, encoding="utf-8")) + encryptor.finalize()
+        pack_encrypted = cipher.encrypt(bytes(pack_padded, encoding="utf-8"))
         pack_encoded = base64.b64encode(pack_encrypted)
         return {"pack": pack_encoded.decode("utf-8")}
 
     def decrypt(self, response: Dict) -> Dict:
-        decryptor = self.create_cipher().decryptor()
+        cipher = self.create_cipher()
         pack_decoded = base64.b64decode(response["pack"])
-        pack_decrypted = decryptor.update(pack_decoded) + decryptor.finalize()
+        pack_decrypted = cipher.decrypt(pack_decoded)
         pack_unpadded = pack_decrypted[0: pack_decrypted.rfind(b"}") + 1]
         return json.loads(pack_unpadded.decode("utf-8"))
 
