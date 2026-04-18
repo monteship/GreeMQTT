@@ -139,16 +139,13 @@ class Device:
             log.error("Failed to synchronize time with device", device_id=self.device_id)
 
     @classmethod
-    def search_devices(cls, ip_address: str) -> Optional[Self]:
-        log.info("Searching for devices using broadcast address", ip_address=ip_address)
-        result = DeviceCommunicator.broadcast_scan(ip_address)
-        if not result:
-            return None
-        raw_json = result[: result.rfind(b"}") + 1]
+    def from_scan_response(cls, raw_data: bytes, ip_address: str) -> Optional[Self]:
+        """Create and bind a Device from a raw broadcast scan response."""
+        raw_json = raw_data[: raw_data.rfind(b"}") + 1]
         try:
             response = json.loads(raw_json)
         except json.JSONDecodeError as e:
-            log.error("Failed to parse search response", ip_address=ip_address, error=str(e))
+            log.error("Failed to parse scan response", ip_address=ip_address, error=str(e))
             return None
 
         is_GCM = "tag" in response
@@ -162,8 +159,28 @@ class Device:
         if not is_GCM and "ver" in decrypted:
             ver = re.search(r"(?<=V)[0-9]+(?<=.)", decrypted["ver"])
             if ver and int(ver.group(0)) >= 2:
-                log.info("Set GCM encryption because version in search responce is 2 or later")
+                log.info("Set GCM encryption because version in search response is 2 or later")
                 is_GCM = True
 
         device = cls(device_ip=ip_address, device_id=cid, name=name, is_GCM=is_GCM)
         return device.bind()
+
+    @classmethod
+    def search_devices(cls, ip_address: str) -> Optional[Self]:
+        log.info("Searching for device", ip_address=ip_address)
+        result = DeviceCommunicator.broadcast_scan(ip_address)
+        if not result:
+            return None
+        return cls.from_scan_response(result, ip_address)
+
+    @classmethod
+    def discover_all(cls, broadcast_address: str = "192.168.1.255") -> list[Self]:
+        """Discover all Gree devices on the network via a single UDP broadcast."""
+        responses = DeviceCommunicator.broadcast_discovery(broadcast_address)
+        devices: list[Self] = []
+        for raw_data, ip in responses:
+            device = cls.from_scan_response(raw_data, ip)
+            if device:
+                devices.append(device)
+        return devices
+

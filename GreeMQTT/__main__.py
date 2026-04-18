@@ -1,22 +1,16 @@
 import ipaddress
-import os
 import signal
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from ipaddress import IPv4Address
 from typing import Optional
 
 from GreeMQTT import device_db
 from GreeMQTT.config import settings
 from GreeMQTT.device.device import Device
-from GreeMQTT.device.device_communication import DeviceCommunicator
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import create_mqtt_client, shutdown_mqtt
 from GreeMQTT.mqtt_handler import start_cleanup_task, start_device_tasks
 
-SCAN_WORKERS = 20
-SCAN_LOG_INTERVAL = 20
 RETRY_SLEEP = 300
 
 
@@ -28,91 +22,90 @@ class GreeMQTTApp:
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda s, f: self.stop_event.set())
 
-    def scan_for_devices(self, device_ips: list[str]):
+    @staticmethod
+    def _get_broadcast_address() -> str:
+        """Derive the broadcast address from the configured network/subnet."""
+        network_list = settings.network_list
+        if network_list:
+            # If specific IPs are given, we can't broadcast — return empty
+            # But if a subnet is given (e.g. "192.168.1.0/24"), use its broadcast
+            for item in network_list:
+                if "/" in item:
+                    return str(ipaddress.IPv4Network(item, strict=False).broadcast_address)
+            return ""
+
+        import os
+        subnet = os.environ.get("SUBNET", "192.168.1.0/24")
+        return str(ipaddress.IPv4Network(subnet, strict=False).broadcast_address)
+
+    def discover_devices(self) -> list[Device]:
+        """Discover devices via broadcast, falling back to known DB devices."""
         known_devices = device_db.get_all_devices()
+        known_by_id = {d.device_id: d for d in known_devices}
 
-        if not device_ips:
-            subnet = os.environ.get("SUBNET", "192.168.1.0/24")
-            log.info("Scanning network for devices", subnet=subnet)
-            network = ipaddress.IPv4Network(subnet)
-            known_ips = [IPv4Address(d.device_ip) for d in known_devices if IPv4Address(d.device_ip) in network.hosts()]
-            device_ips = [str(ip) for ip in known_ips + [ip for ip in network.hosts() if ip not in known_ips]]
-            if not device_ips:
-                raise ValueError("No valid IPs found in the specified subnet")
+        broadcast_addr = self._get_broadcast_address()
+        discovered: list[Device] = []
 
-        def scan_ip(target_ip: str) -> Optional[Device]:
-            try:
-                if not DeviceCommunicator.broadcast_scan(target_ip):
-                    return None
-                device = next((d for d in known_devices if d.device_ip == target_ip), None)
-                if not device:
-                    device = Device.search_devices(target_ip)
-                    if device and device.key:
-                        device_db.save_device(device.device_id, device.device_ip, device.key, device.is_GCM)
-                        log.info("Found new device", ip=target_ip)
-                    else:
-                        log.warning("Device not found or invalid key", ip=target_ip)
+        if broadcast_addr:
+            log.info("Discovering devices via broadcast", broadcast=broadcast_addr)
+            for device in Device.discover_all(broadcast_addr):
+                if device.device_id not in known_by_id:
+                    device_db.save_device(device.device_id, device.device_ip, device.key, device.is_GCM)
+                    log.info("Found new device", ip=device.device_ip, id=device.device_id)
+                else:
+                    # Use stored key but update IP if changed
+                    known = known_by_id[device.device_id]
+                    if known.device_ip != device.device_ip:
+                        device_db.save_device(device.device_id, device.device_ip, known.key, known.is_GCM)
+                        log.info("Device IP updated", id=device.device_id, old_ip=known.device_ip, new_ip=device.device_ip)
+                discovered.append(device)
+
+        # Also try specific IPs from NETWORK config that weren't found via broadcast
+        discovered_ips = {d.device_ip for d in discovered}
+        specific_ips = [ip for ip in settings.network_list if "/" not in ip and ip not in discovered_ips]
+        for ip in specific_ips:
+            device = self._try_connect_ip(ip, known_by_id)
+            if device:
+                discovered.append(device)
+
+        # Add known DB devices that weren't discovered (they may still be reachable)
+        discovered_ids = {d.device_id for d in discovered}
+        for known in known_devices:
+            if known.device_id not in discovered_ids:
+                log.info("Using known device from DB", id=known.device_id, ip=known.device_ip)
+                discovered.append(known)
+
+        return discovered
+
+    @staticmethod
+    def _try_connect_ip(ip: str, known_by_id: dict[str, Device]) -> Optional[Device]:
+        """Try to discover a device at a specific IP."""
+        try:
+            device = Device.search_devices(ip)
+            if device and device.key:
+                if device.device_id not in known_by_id:
+                    device_db.save_device(device.device_id, device.device_ip, device.key, device.is_GCM)
+                    log.info("Found new device at specific IP", ip=ip, id=device.device_id)
                 return device
-            except Exception as e:
-                log.error("Error scanning IP", ip=target_ip, error=str(e))
-            return None
-
-        with ThreadPoolExecutor(max_workers=SCAN_WORKERS) as executor:
-            futures = {executor.submit(scan_ip, str(ip)): str(ip) for ip in device_ips}
-            completed = 0
-            for future in as_completed(futures):
-                completed += 1
-                if completed % SCAN_LOG_INTERVAL == 0:
-                    log.info("Scanned IPs", scanned=completed)
-                try:
-                    device = future.result()
-                    if isinstance(device, Device):
-                        log.info("Device found", ip=device.device_ip, id=device.device_id)
-                        yield device
-                except Exception as e:
-                    log.error("Scan error", error=str(e))
+        except Exception as e:
+            log.error("Error scanning IP", ip=ip, error=str(e))
+        return None
 
     def discover_and_setup_devices(self):
-        remaining = settings.network_list.copy() if settings.network_list else []
         mqtt_client = create_mqtt_client()
+        devices = self.discover_devices()
 
-        for device in self.scan_for_devices(remaining):
+        if not devices:
+            log.warning("No devices found")
+            return
+
+        for device in devices:
             try:
-                if device.device_ip in remaining:
-                    remaining.remove(device.device_ip)
                 start_device_tasks(device, mqtt_client, self.stop_event)
-                log.info("Started device", ip=device.device_ip)
+                log.info("Started device", ip=device.device_ip, id=device.device_id)
             except Exception as e:
                 log.error("Failed to setup device", ip=device.device_ip, error=str(e))
 
-        if remaining:
-            log.warning("Some devices were not found", missing=remaining)
-            self._retry_missing(remaining, mqtt_client)
-
-    def _retry_missing(self, missing: list[str], mqtt_client=None):
-        from GreeMQTT.mqtt_handler import interruptible_sleep
-
-        if mqtt_client is None:
-            mqtt_client = create_mqtt_client()
-
-        while not self.stop_event.is_set() and missing:
-            for ip in missing.copy():
-                try:
-                    device = Device.search_devices(ip)
-                    if device and device.key:
-                        log.info("New device found", device=str(device))
-                        device_db.save_device(device.device_id, device.device_ip, device.key, device.is_GCM)
-                        start_device_tasks(device, mqtt_client, self.stop_event)
-                        missing.remove(ip)
-                except Exception as e:
-                    log.error("Error during device retry", device_ip=ip, error=str(e))
-
-            if not missing:
-                log.info("All devices found")
-                break
-            if interruptible_sleep(RETRY_SLEEP, self.stop_event):
-                break
-            log.info("Retrying missing devices", missing=missing)
 
     def run(self):
         self.setup_signal_handlers()
