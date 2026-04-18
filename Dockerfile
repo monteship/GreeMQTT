@@ -1,7 +1,7 @@
 # --- Stage 1: Build dependencies ---
 FROM python:3.13-slim AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+RUN pip install --no-cache-dir uv
 
 ENV UV_COMPILE_BYTECODE=1
 
