@@ -1,4 +1,6 @@
 from GreeMQTT.device.device_db import DeviceDB
+from GreeMQTT.logger import log
 
 device_db = DeviceDB()
-device_db.init_db()
+
+log.info("GreeMQTT package initialized")

@@ -33,6 +33,7 @@ class DeviceDB:
                 )
             """)
             conn.commit()
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.close()
         except sqlite3.Error as e:
             log.error("Failed to initialize database", db_path=self.db_path, error=str(e))
