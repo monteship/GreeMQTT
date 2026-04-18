@@ -1,5 +1,5 @@
 from functools import lru_cache
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from GreeMQTT.logger import log
@@ -71,7 +71,15 @@ class AppSettings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> AppSettings:
-    s = AppSettings()
+    try:
+        s = AppSettings()
+    except ValidationError as e:
+        for err in e.errors():
+            field = err.get("loc", ("unknown",))[-1]
+            msg = err.get("msg", "unknown error")
+            log.error("Configuration error", field=field, detail=msg)
+        log.error("Failed to load settings. Check your .env file or environment variables.")
+        raise SystemExit(1)
     log.debug(
         "Initialized MQTT with",
         broker=s.mqtt_broker,
