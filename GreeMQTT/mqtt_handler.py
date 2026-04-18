@@ -64,7 +64,9 @@ def _poll_device_params(
 ):
     params_topic = device.topic
     last_params: Optional[dict] = None
+    last_publish_time: float = 0.0
     consecutive_errors = 0
+    keep_alive_interval = 60.0
 
     while not stop_event.is_set():
         polling_interval = adaptive_polling_manager.get_polling_interval(device.device_id)
@@ -78,13 +80,20 @@ def _poll_device_params(
         try:
             params = device.get_param()
             if params:
-                # Only publish if non-volatile fields changed
                 comparable = {k: v for k, v in params.items() if k != "last_seen"}
-                if comparable != last_params:
+                changed = comparable != last_params
+                elapsed = time.time() - last_publish_time
+                should_publish = changed or elapsed >= keep_alive_interval
+
+                if should_publish:
                     params_str = json.dumps(params, separators=(",", ":"))
                     mqtt_client.publish(params_topic, params_str, qos=settings.mqtt_qos, retain=settings.mqtt_retain)
-                    log.debug("Publishing params", topic=params_topic, params=params_str)
-                    last_params = comparable
+                    last_publish_time = time.time()
+                    if changed:
+                        log.debug("Publishing params (changed)", topic=params_topic, params=params_str)
+                        last_params = comparable
+                    else:
+                        log.debug("Publishing params (keep-alive)", topic=params_topic)
                 consecutive_errors = 0
             else:
                 consecutive_errors += 1
