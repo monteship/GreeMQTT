@@ -7,24 +7,24 @@ from GreeMQTT.logger import log
 
 _mqtt_client: paho_mqtt.Client | None = None
 _mqtt_lock = threading.Lock()
+_subscribed_topics: dict[str, int] = {}
 
 RECONNECT_DELAY_MIN = 1
 RECONNECT_DELAY_MAX = 60
 
 
-def _on_connect(client, userdata, flags, rc, properties=None):
+def _on_connect(client: paho_mqtt.Client, userdata, flags, rc, properties=None) -> None:
     if rc == 0:
         log.info("MQTT connected", broker=settings.mqtt_broker, port=settings.mqtt_port)
         client.publish(f"{settings.mqtt_topic}/status", "online", qos=settings.mqtt_qos, retain=True)
-        # Re-subscribe to all previously subscribed topics
-        for topic, qos in getattr(client, "_subscribed_topics", {}).items():
+        for topic, qos in _subscribed_topics.items():
             client.subscribe(topic, qos=qos)
             log.debug("Re-subscribed after reconnect", topic=topic)
     else:
         log.error("MQTT connection failed", rc=rc)
 
 
-def _on_disconnect(client, userdata, flags, rc, properties=None):
+def _on_disconnect(client: paho_mqtt.Client, userdata, flags, rc, properties=None) -> None:
     if rc != 0:
         log.warning("MQTT disconnected unexpectedly, will auto-reconnect", rc=rc)
 
@@ -37,7 +37,6 @@ def create_mqtt_client() -> paho_mqtt.Client:
             return _mqtt_client
 
         client = paho_mqtt.Client(paho_mqtt.CallbackAPIVersion.VERSION2)
-        client._subscribed_topics = {}  # track subscriptions for re-subscribe on reconnect
 
         client.on_connect = _on_connect
         client.on_disconnect = _on_disconnect
@@ -55,13 +54,13 @@ def create_mqtt_client() -> paho_mqtt.Client:
         client.connect(settings.mqtt_broker, settings.mqtt_port, settings.mqtt_keep_alive)
         client.loop_start()
         _mqtt_client = client
-        return _mqtt_client
+        return client
 
 
-def subscribe_topic(topic: str, qos: int = settings.mqtt_qos):
+def subscribe_topic(topic: str, qos: int = settings.mqtt_qos) -> None:
     """Subscribe and track the topic for automatic re-subscription on reconnect."""
     client = create_mqtt_client()
-    client._subscribed_topics[topic] = qos
+    _subscribed_topics[topic] = qos
     client.subscribe(topic, qos=qos)
 
 

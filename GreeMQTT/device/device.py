@@ -154,7 +154,7 @@ class Device:
         is_GCM = "tag" in response
         decrypted = decrypt(response, is_GCM=is_GCM)
         name = decrypted.get("name", "Unknown")
-        cid = decrypted.get("cid", response.get("cid")) or decrypted.get("mac")
+        cid: str | None = decrypted.get("cid", response.get("cid")) or decrypted.get("mac")
         if not cid:
             log.error("Device ID (cid) not found in response", response=decrypted)
             return None

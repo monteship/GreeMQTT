@@ -1,25 +1,26 @@
-FROM python:3.14-slim
+# --- Stage 1: Build dependencies ---
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libffi-dev \
-    python3-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy project files
 COPY pyproject.toml uv.lock /app/
-RUN pip install uv
-RUN uv sync --frozen --no-dev --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
 
 COPY GreeMQTT /app/GreeMQTT/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
-# For testing purposes, uncomment the following lines to set environment variables
+# --- Stage 2: Final runtime image ---
+FROM python:3.14-slim
+WORKDIR /app
+
+COPY --from=builder /app /app
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     LOG_LEVEL=INFO
 
-
-CMD ["uv", "run", "GreeMQTT"]
+CMD ["/app/.venv/bin/python", "-m", "GreeMQTT"]

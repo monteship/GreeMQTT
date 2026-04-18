@@ -21,7 +21,7 @@ class AppSettings(BaseSettings):
     network: str = Field(default="", alias="NETWORK")
 
     # --- MQTT ---
-    mqtt_broker: str = Field(alias="MQTT_BROKER")
+    mqtt_broker: str = Field(default="", alias="MQTT_BROKER")
     mqtt_port: int = Field(default=1883, alias="MQTT_PORT")
     mqtt_user: str | None = Field(default=None, alias="MQTT_USER")
     mqtt_password: str | None = Field(default=None, alias="MQTT_PASSWORD")
@@ -53,6 +53,13 @@ class AppSettings(BaseSettings):
         if not self.tracking_params:
             return [p.strip() for p in DEFAULT_PARAMS.split(",") if p.strip()]
         return [item.strip() for item in self.tracking_params.split(",") if item.strip()]
+
+    @field_validator("mqtt_broker")
+    @classmethod
+    def validate_broker(cls, v: str) -> str:
+        if not v:
+            raise ValueError("MQTT_BROKER must be set.")
+        return v
 
     @field_validator("mqtt_qos")
     @classmethod

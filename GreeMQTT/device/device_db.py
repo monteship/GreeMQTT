@@ -1,17 +1,16 @@
-import os
 import sqlite3
+from pathlib import Path
 from typing import List, Optional
 
 from GreeMQTT.device.device import Device
 from GreeMQTT.logger import log
 
 
-def get_project_root():
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def get_project_root() -> Path:
+    return Path(__file__).resolve().parent.parent
 
 
-DB_PATH = os.path.join(get_project_root(), "..", "devices.db")
-DB_PATH = os.path.abspath(DB_PATH)
+DB_PATH = str(get_project_root().parent / "devices.db")
 
 
 class DeviceDB:
