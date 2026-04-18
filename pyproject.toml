@@ -1,6 +1,6 @@
 [project]
 name = "GreeMQTT"
-version = "2.0.1"
+version = "2.0.2"
 description = "MQTT bridge for Gree devices"
 authors = [
     { name = "monteship", email = "monteship@gmail.com" }
@@ -11,11 +11,11 @@ keywords = ["gree", "mqtt", "home-assistant"]
 
 requires-python = ">=3.13"
 dependencies = [
-    "structlog>=25.3.0",
+    "structlog==25.5.0",
     "paho-mqtt>=2.0.0",
-    "python-dotenv>=1.1.0",
+    "python-dotenv==1.2.2",
     "pycryptodomex>=3.22.0",
-    "tqdm>=4.67.1",
+    "tqdm==4.67.3",
     "pydantic-settings>=2.13.1",
 ]
 classifiers = [

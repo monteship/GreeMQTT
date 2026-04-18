@@ -1,5 +1,7 @@
 # --- Stage 1: Build dependencies ---
-FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
+FROM python:3.13-slim AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1
 
@@ -14,7 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # --- Stage 2: Final runtime image ---
-FROM python:3.14-slim
+FROM python:3.13-slim
 WORKDIR /app
 
 COPY --from=builder /app /app
