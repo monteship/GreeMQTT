@@ -103,7 +103,6 @@ docker build -t greemqtt .
 
 - `linux/amd64` — x86_64
 - `linux/arm64` — Raspberry Pi 4, Apple Silicon
-- `linux/arm/v7` — Raspberry Pi 3
 
 ## Troubleshooting
 
