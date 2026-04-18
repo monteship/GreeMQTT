@@ -1,318 +1,138 @@
 # GreeMQTT
 
-## Description
-GreeMQTT bridges Gree air conditioners and similar devices to MQTT, enabling integration with smart home platforms like Home Assistant. It discovers Gree devices on your network, retrieves their parameters, and allows control via MQTT topics with fast response times and adaptive polling.
+Bridge Gree air conditioners to MQTT for integration with Home Assistant and other smart home platforms. Discovers devices automatically, retrieves parameters, and enables control via MQTT topics.
 
-**Single-Container Architecture**: GreeMQTT runs entirely in one Docker container with an internal event-driven queue system. No external message brokers (Redis, RabbitMQ) required - just a simple, self-contained deployment.
+**Single-container, event-driven architecture** — no Redis, RabbitMQ, or docker-compose required.
 
-## Key Features
-- **Single-Container Deployment**: Complete event-driven architecture in one container
-- **Internal Event Queue**: Built-in asyncio-based queue system for event processing
-- **Fast Response System**: Low-latency MQTT message processing with direct callbacks
-- **Improved Responsiveness**: Sub-second command response times (typically 50-150ms)
-- **Direct Execution**: Commands processed without queue delays
-- **Concurrent Processing**: Multiple MQTT commands processed simultaneously  
-- **Immediate Feedback**: Device state publishing after parameter changes
-- **Performance Monitoring**: Processing metrics and callback statistics
-- **Adaptive Polling**: Automatically adjusts polling frequency based on activity
-- **Low Latency**: Callback architecture reduces processing bottlenecks
-- **No External Dependencies**: No Redis, RabbitMQ, or other message brokers needed
+## Features
+
 - Automatic device discovery on the local network
-- Periodic device parameter updates with configurable intervals
 - MQTT-based control for setting and retrieving device parameters
+- Adaptive multi-tier polling (0.1s → 0.3s → 0.8s → 3s) based on activity
+- Sub-second command response times (typically 50–150ms)
+- Concurrent processing of multiple MQTT commands
+- Immediate state publishing after parameter changes
 - Configuration via environment variables or `.env` file
-- Docker support for easy deployment
+- Multi-platform Docker support (amd64, arm64, arm/v7)
 
-## Fast Response System
+## Quick Start
 
-### Low-Latency Architecture
-GreeMQTT features a callback system that reduces traditional queue bottlenecks:
+### Docker (Recommended)
 
-- **Direct Message Routing**: MQTT messages trigger callbacks upon arrival
-- **Reduced Queue Processing**: Minimizes worker queues and message delays
-- **Concurrent Execution**: Multiple callbacks execute simultaneously for different devices
-- **Quick State Updates**: Device states published promptly after parameter changes
+```bash
+docker run --env-file .env --network host --name greemqtt monteship/greemqtt:latest
+```
 
-## Adaptive Polling Features
+`--network host` is required for UDP device discovery.
 
-### Multi-Tier Polling System
-Combined with the callback system for improved responsiveness:
+### Manual
 
-- **High-Frequency Mode (0.1s)**: Fast polling for 3 seconds after a command
-- **Medium-Frequency Mode (0.3s)**: Elevated polling for the next 12 seconds  
-- **Fast Mode (0.8s)**: Accelerated polling for remaining adaptive time
-- **Normal Mode (3s)**: Standard polling when devices are idle
-
-### Message Processing
-- **Direct callback registration** for each device topic
-- **Reduced-latency message execution** without queuing delays
-- **Concurrent callback processing** for multiple simultaneous commands
-- **Processing time tracking** with callback execution metrics
-
-### Performance Monitoring
-- Response count tracking
-- Callback execution statistics
-- Processing time tracking
-- Average performance metrics
-- Command frequency monitoring per device
-- Adaptive polling statistics
-
-## Requirements
-- Python 3.12+
-- Docker (optional, for containerized deployment)
-
-## Installation
-
-### 1. Clone the Repository
 ```bash
 git clone https://github.com/monteship/GreeMQTT.git
 cd GreeMQTT
-```
-
-### 2. Install Dependencies
-```bash
 python -m pip install -e .
-```
-
-### 3. Configure Environment Variables
-Create a `.env` file in the root directory and set the following variables:
-```env
-NETWORK=192.168.1.100,192.168.1.101 
-MQTT_BROKER=your_mqtt_broker
-MQTT_PORT=your_mqtt_port
-MQTT_USER=your_mqtt_user
-MQTT_PASSWORD=your_mqtt_password
-MQTT_TOPIC=your_mqtt_topic
-UPDATE_INTERVAL=3
-ADAPTIVE_POLLING_TIMEOUT=45
-ADAPTIVE_FAST_INTERVAL=0.8
-MQTT_MESSAGE_WORKERS=3
-IMMEDIATE_RESPONSE_TIMEOUT=5
-```
-
-## Configuration Explanation
-
-### Basic Configuration
-- `NETWORK`: Comma-separated list of Gree device IPs or leave empty for auto-discovery.
-- `MQTT_BROKER`: Address of your MQTT broker.
-- `MQTT_PORT`: MQTT broker port (default: 1883).
-- `MQTT_USER`/`MQTT_PASSWORD`: MQTT credentials.
-- `MQTT_TOPIC`: Base topic for publishing and subscribing.
-- `SUBNET`: (Optional) subnet for device discovery (default: `192.168.1.0/24`).
-- `UDP_PORT`: (Optional) UDP port for device communication (default: `7000`).
-
-### Enhanced Responsiveness Configuration
-- `UPDATE_INTERVAL`: Normal polling interval in seconds (default: 3, reduced from 4 for better responsiveness).
-- `ADAPTIVE_POLLING_TIMEOUT`: Duration of adaptive polling in seconds (default: 45, optimized for faster return to normal).
-- `ADAPTIVE_FAST_INTERVAL`: Fast polling interval during adaptive mode (default: 0.8, improved from 1 second).
-- `EVENT_QUEUE_WORKERS`: Number of concurrent event queue workers (default: 5, for internal event processing).
-- `IMMEDIATE_RESPONSE_TIMEOUT`: Duration of ultra-fast polling after commands (default: 5 seconds).
-
-### Performance Tuning Tips
-- **High-traffic environments**: Increase `EVENT_QUEUE_WORKERS` to 7-10 for more concurrent event processing
-- **Low-latency requirements**: Decrease `ADAPTIVE_FAST_INTERVAL` to 0.5
-- **Battery-powered setups**: Increase `UPDATE_INTERVAL` to 5-10 seconds
-- **Resource-constrained systems**: Decrease `EVENT_QUEUE_WORKERS` to 3 to reduce memory usage
-
-### 4. Run the Application
-```bash
 python -m GreeMQTT
 ```
 
-## Docker Deployment
+## Configuration
 
-**GreeMQTT runs as a single, self-contained Docker container.** No docker-compose, no external services required.
+Create a `.env` file:
 
-### 1. Pull or Build the Docker Image
+```env
+# Required
+MQTT_BROKER=192.168.1.50
 
-**Option A: Pull from Docker Hub**
-```bash
-docker pull monteship/greemqtt:latest
+# Optional — Network
+NETWORK=192.168.1.100,192.168.1.101  # Leave empty for auto-discovery
+
+# Optional — MQTT
+MQTT_PORT=1883
+MQTT_USER=
+MQTT_PASSWORD=
+MQTT_TOPIC=gree
+MQTT_QOS=0
+MQTT_RETAIN=false
+MQTT_KEEP_ALIVE=60
+
+# Optional — Polling & Performance
+UPDATE_INTERVAL=3                  # Normal polling interval (seconds)
+ADAPTIVE_POLLING_TIMEOUT=45        # Adaptive polling duration (seconds)
+ADAPTIVE_FAST_INTERVAL=0.8         # Fast polling interval (seconds)
+EVENT_QUEUE_WORKERS=5              # Concurrent event workers
+IMMEDIATE_RESPONSE_TIMEOUT=5       # Ultra-fast polling after commands (seconds)
 ```
 
-**Option B: Build Locally**
+### Tuning Tips
+
+| Scenario | Recommendation |
+|---|---|
+| High traffic | Increase `EVENT_QUEUE_WORKERS` to 7–10 |
+| Low latency | Decrease `ADAPTIVE_FAST_INTERVAL` to 0.5 |
+| Resource constrained | Decrease `EVENT_QUEUE_WORKERS` to 3 |
+| Battery powered | Increase `UPDATE_INTERVAL` to 5–10 |
+
+## Usage
+
+### MQTT Control
+
+Set parameters:
+```bash
+gree/deviceId/set {"Pow":1,"SetTem":24}
+```
+
+Multiple devices simultaneously:
+```bash
+gree/device1/set {"Pow":1}
+gree/device2/set {"SetTem":22}
+gree/device3/set {"WdSpd":"auto"}
+```
+
+### Home Assistant
+
+See the example configuration: [mqtt.yaml](https://github.com/monteship/GreeMQTT/blob/master/mqtt.yaml)
+
+## Docker
+
+### Build Locally
+
 ```bash
 docker build -t greemqtt .
 ```
 
-### 2. Run the Single Container
-```bash
-docker run --env-file .env --network host --name greemqtt monteship/greemqtt:latest
-```
-- `--env-file .env`: Loads environment variables from your `.env` file.
-- `--network host`: Required for device discovery on your local network.
+### Supported Architectures
 
-**That's it!** No orchestration, no external services, no complex setup. Everything runs in this one container.
-
-### 3. Multi-Platform Support
-
-The image supports multiple architectures:
-- `linux/amd64` - x86_64 systems
-- `linux/arm64` - ARM 64-bit (Raspberry Pi 4, Apple Silicon, etc.)
-- `linux/arm/v7` - ARM 32-bit (Raspberry Pi 3, etc.)
-
-### 4. Health Monitoring
-The Docker image includes a built-in health check that monitors:
-- Application responsiveness
-- Required environment variables
-- MQTT broker connectivity
-
-Docker will automatically check the container health every 30 seconds. You can view health status with:
-```bash
-docker ps
-docker inspect greemqtt --format='{{.State.Health.Status}}'
-```
-
-The health check logs can be viewed with:
-```bash
-docker logs greemqtt
-```
-
-## Usage
-
-### 1. Device Discovery
-The application will automatically discover devices on the specified network. You can specify the network in the `.env` file or as an environment variable.
-
-### 2. MQTT Control with Enhanced Responsiveness
-Control devices by publishing messages to the specified MQTT topic. The application now provides:
-- **Sub-second response times** for immediate feedback
-- **Concurrent command processing** for multiple simultaneous operations
-- **Automatic state publishing** after each parameter change
-
-### 3. Intelligent Parameter Updates
-The application uses smart polling that automatically adjusts based on activity:
-- **0.1-second updates** immediately after commands for instant feedback
-- **Gradual transition** to normal polling as activity decreases
-- **Efficient resource usage** during idle periods
-
-### 4. Example MQTT Messages with Fast Response
-- To set a parameter (now with sub-second feedback):
-```bash
-MQTT_TOPIC/deviceId/set {"Pow":1,"SetTem":24}
-# Response typically received within 100-300ms
-```
-
-- Multiple concurrent commands are now supported:
-```bash
-# These commands can be processed simultaneously
-MQTT_TOPIC/device1/set {"Pow":1}
-MQTT_TOPIC/device2/set {"SetTem":22}
-MQTT_TOPIC/device3/set {"WdSpd":"auto"}
-```
-
-### 5. Performance Monitoring
-Monitor system performance through logs:
-```bash
-# Processing time logs show responsiveness metrics
-[DEBUG] Set parameters for device - processing_time_ms: 150.5, avg_processing_time_ms: 200.2
-```
-
-## Automatic Device Discovery
-If the `NETWORK` environment variable is not set, GreeMQTT will automatically scan your local network for compatible Gree devices on port 7000. This makes setup easier, as you do not need to manually specify device IP addresses. The discovered devices will be added to the internal database and managed automatically.
-
-### Home Assistant Integration
-Add the following to your Home Assistant `configuration.yaml` to subscribe to GreeMQTT topics:
-https://github.com/monteship/GreeMQTT/blob/master/mqtt.yaml
-
-## Architecture
-
-GreeMQTT uses a **single-container, event-driven architecture** with an internal queue system.
-
-### Internal Event Queue System
-
-- **Built-in asyncio queue**: Priority-based event processing within the container
-- **No external brokers**: Redis, RabbitMQ, or Celery not required
-- **Concurrent workers**: Multiple asyncio tasks process events concurrently
-- **Direct callbacks**: Critical MQTT commands bypass the queue for ultra-low latency
-- **In-memory state**: All device and polling state managed in-process
-
-### Key Components
-
-1. **InternalEventQueue**: Priority-based asyncio queue for background tasks
-2. **DeviceRegistry**: In-memory topic-to-device mapping
-3. **AdaptivePollingManager**: Dynamic polling frequency management
-4. **Direct MQTT Callbacks**: Instant message processing without queuing
-
-### Why Single Container?
-
-✅ **Simple deployment** - No orchestration needed  
-✅ **Low latency** - Direct in-process communication  
-✅ **Resource efficient** - Minimal memory/CPU overhead  
-✅ **Easy to maintain** - One container to manage  
-✅ **No external dependencies** - Self-contained application  
-
-For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
+- `linux/amd64` — x86_64
+- `linux/arm64` — Raspberry Pi 4, Apple Silicon
+- `linux/arm/v7` — Raspberry Pi 3
 
 ## Troubleshooting
-- Ensure devices are on the same network as the application.
-- Verify MQTT broker settings and connectivity.
-- Check logs for error messages.
-- For issues, open an issue on the GitHub repository.
-- Ensure your devices and the host/container are on the same network segment.
-- Use `--network host` with Docker for proper device discovery.
-- Check logs for errors: `docker logs greemqtt` or console output.
 
-### Docker Health Check Issues
-If the Docker container shows as unhealthy, you can:
-- Check health status: `docker inspect greemqtt --format='{{.State.Health.Status}}'`
-- View health check logs in the container logs: `docker logs greemqtt`
-- Manually run the health check: `docker exec greemqtt python /app/healthcheck.py`
-- Verify MQTT broker connectivity from the container: `docker exec greemqtt nc -zv $MQTT_BROKER 1883`
+- Ensure devices and the host are on the same network segment.
+- Use `--network host` with Docker for device discovery.
+- Check logs: `docker logs greemqtt`
+- If auto-discovery fails (common on Docker Desktop, cloud VMs, NAS), specify IPs directly via `NETWORK`.
 
-### Docker UDP Broadcast Troubleshooting
+### Testing Device Connectivity
 
-If device discovery works on the host but not inside Docker:
-
-- Ensure you run the container with `--network host` (required for UDP broadcast).
-- Make sure UDP port 7000 is open on your host firewall:
-  `sudo ufw allow 7000/udp`
-- Some environments (cloud VMs, certain NAS, or Docker Desktop on Mac/Windows) do not support `--network host` or UDP broadcast. In these cases, device discovery may not work from inside Docker.
-- As a workaround, specify device IPs directly in your `.env` file using the `NETWORK` variable:
-  ```
-  NETWORK=192.168.1.41,192.168.1.40
-  ```
-- You can test UDP broadcast from inside the container:
-  ```bash
-  docker exec -u root -it greemqtt bash
-  apt update && apt install -y socat
-  echo '{"t":"scan"}' | socat - UDP-DATAGRAM:192.168.1.255:7000,broadcast
-  ```
-  If you see no output, UDP broadcast is not working in your Docker environment.
-
-
-## Helpful commands
 ```bash
+# Scan for Gree devices
 echo '{"t":"scan"}' | socat - UDP-DATAGRAM:192.168.1.255:7000,broadcast
-# This command sends a scan request to discover Gree devices on the local network.
-# Example output:
-# {"t":"pack","i":1,"uid":0,"cid":"502cc6a2bdb5","tcid":"","pack":"LP24Ek0OaYogxs3iQLjL4IJZ8Tc1GhwGgU1QWl/HwnMFDrdIfUg0NJmUJNu7AwXqwAOx/ClklKGq9spJo3oG4TnWMzaLQaaw1aFXlE9k71L0cMm8bsr/y4FkxumpRg1t0xV8+/m47OTBNaX/8aUl1dlSUvgTB047e91whA8Mx+BzMQoS41XpnORSG7+GfavhnKYbt0iIDsdp8/ftXlA9HkRwlDB/b65kWltUYwGtbty80gq9HxK8Loa8WXVjgZcP4Vf5MjKxa60Xt5J1oI+lsxUuXTHkgunLg76WWGy+euo="}
-# {"t":"pack","i":1,"uid":0,"cid":"","tcid":"","pack":"LP24Ek0OaYogxs3iQLjL4EZ+Xq1EbShb2ys5VE0+JfaMa9lM2RqI/KytvJ32IsGSZXrOr+MakVzzXHbghPeyiui/giRwi/22P1NeJSbhyoDt21IYC5nmTB0FSNCtGSQCq+qmiRmaZjpRwuO7Fe5EbuQqhDgWpIlXPBd0kSiOb/EJPRFZzjLrUDkhvMjz32yVMkOVsFsTAafzePY7qSehbZIhsbG6Ck8X1+GBAEqEtdxSARmdHzsfl0hV7CQKMyULqf7+wHqDf2mz9uzNFv2ejeSQamdCPojzhBoiY0/QI0FjKzbWMRG6ftFbCalgfYcMphjtFkYpY2Dv1B44KKRYoOqBuo3ABqh7zjtQE21CWaSsH6bNGMeBkcgCC2vvIqV6"}%      
-# Output indicates that Gree devices are present on the network, showing their unique identifiers and capabilities.
 
-
+# Check if a device is reachable
 nmap -sU -p 7000 192.168.1.41
-# This command scans the specified IP address for open UDP port 7000, which is used by Gree devices.
-# Example output:
-# Starting Nmap 7.97 ( https://nmap.org ) at 2025-06-22 17:43 +0300
-# Nmap scan report for 192.168.1.41
-# Host is up (0.023s latency).
-
-# PORT     STATE         SERVICE
-# 7000/udp open|filtered afs3-fileserver
-# MAC Address: 50:2C:C6:A2:BD:B5 (Gree Electric Appliances, OF Zhuhai)
-
-# Nmap done: 1 IP address (1 host up) scanned in 4.93 seconds
-# Output indicates that the Gree device is reachable on port 7000, confirming its presence on the network.
-
 ```
 
+### Docker UDP Issues
+
+If discovery works on the host but not in Docker:
+1. Verify `--network host` is set.
+2. Open UDP port 7000: `sudo ufw allow 7000/udp`
+3. Fall back to specifying IPs in `NETWORK` if broadcast is unsupported.
 
 ## Contributing
-Contributions are welcome! Please open an issue or submit a pull request for suggestions or improvements.
-Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
 
-## Support
-For questions or issues, open an issue on [GitHub](https://github.com/monteship/GreeMQTT/issues).
+Contributions welcome! For major changes, please open an issue first.
 
 ## License
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+[MIT](LICENSE)

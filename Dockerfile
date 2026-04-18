@@ -1,5 +1,7 @@
 # --- Stage 1: Build dependencies ---
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends gcc build-essential libffi-dev && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir uv
 
@@ -16,7 +18,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # --- Stage 2: Final runtime image ---
-FROM python:3.13-slim
+FROM python:3.14-slim
 WORKDIR /app
 
 COPY --from=builder /app /app
