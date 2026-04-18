@@ -1,11 +1,9 @@
-# --- Stage 1: Build dependencies ---
 FROM python:3.14-slim AS builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends gcc build-essential libffi-dev && rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-RUN pip install --no-cache-dir uv
-
-ENV UV_COMPILE_BYTECODE=1
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
 WORKDIR /app
 
@@ -17,7 +15,6 @@ COPY GreeMQTT /app/GreeMQTT/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
-# --- Stage 2: Final runtime image ---
 FROM python:3.14-slim
 WORKDIR /app
 
