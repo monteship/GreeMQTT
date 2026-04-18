@@ -97,8 +97,6 @@ class Device:
         return None
 
     def get_param(self) -> Optional[Dict]:
-        from GreeMQTT import device_db
-
         cols = ",".join(f'"{p}"' for p in settings.tracking_params_list)
         status_pack = f'{{"cols":[{cols}],"mac":"{self.device_id}","t":"status"}}'
         request = self._encrypt_request(status_pack)
@@ -109,12 +107,10 @@ class Device:
         response = json.loads(result)
         if response.get("t") == "pack":
             params = self._decrypt_response(response)
-            device_db.update_seen_at(self.device_id)
             return DeviceParamConverter.from_device(params)
         return {}
 
     def set_params(self, params: dict) -> dict[str, str | int] | None:
-        from GreeMQTT import device_db
 
         converted = DeviceParamConverter.to_device(params)
         pack = json.dumps({"opt": list(converted.keys()), "p": list(converted.values()), "t": "cmd"})
@@ -124,7 +120,6 @@ class Device:
             return None
         response = json.loads(result)
         if response.get("t") == "pack":
-            device_db.update_seen_at(self.device_id)
             return self._decrypt_response(response)
         return None
 

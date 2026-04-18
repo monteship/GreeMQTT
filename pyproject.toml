@@ -1,6 +1,6 @@
 [project]
 name = "GreeMQTT"
-version = "2.0.0"
+version = "2.0.1"
 description = "MQTT bridge for Gree devices"
 authors = [
     { name = "monteship", email = "monteship@gmail.com" }
@@ -15,7 +15,6 @@ dependencies = [
     "paho-mqtt>=2.0.0",
     "python-dotenv>=1.1.0",
     "pycryptodomex>=3.22.0",
-    "pydantic-settings>=2.13.0",
     "tqdm>=4.67.1",
     "pydantic-settings>=2.13.1",
 ]
