@@ -10,7 +10,6 @@ from GreeMQTT.device.device import Device
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import subscribe_topic
 
-# Thread-safe device registry
 _device_registry: dict[str, Device] = {}
 _registry_lock = threading.Lock()
 
@@ -19,10 +18,26 @@ adaptive_polling_manager = AdaptivePollingManager(settings.adaptive_polling_time
 _on_message_set = False
 ERROR_BACKOFF_BASE = 0.5
 ERROR_BACKOFF_MAX_EXPONENT = 4
+REBIND_AFTER_ERRORS = 3
 
 
 def interruptible_sleep(duration: float, stop_event: threading.Event) -> bool:
     return stop_event.wait(timeout=duration)
+
+
+def _attempt_rebind(device: Device, consecutive_errors: int, stop_event: threading.Event) -> int:
+    """Attempt to rebind a device after consecutive failures. Returns updated error count."""
+    log.warning("Attempting rebind after consecutive errors",
+                device_id=device.device_id, consecutive_errors=consecutive_errors)
+    backoff = min(30.0, ERROR_BACKOFF_BASE * (2 ** min(consecutive_errors, ERROR_BACKOFF_MAX_EXPONENT)))
+    if stop_event.wait(timeout=backoff):
+        return consecutive_errors
+    result = device.bind()
+    if result:
+        log.info("Rebind succeeded", device_id=device.device_id)
+        return 0
+    log.error("Rebind failed", device_id=device.device_id)
+    return consecutive_errors
 
 
 def start_device_tasks(
@@ -98,11 +113,15 @@ def _poll_device_params(
                 consecutive_errors += 1
                 log.warning("No params returned from device", device_id=device.device_id,
                             consecutive_errors=consecutive_errors)
+                if consecutive_errors >= REBIND_AFTER_ERRORS:
+                    consecutive_errors = _attempt_rebind(device, consecutive_errors, stop_event)
 
         except Exception as e:
             consecutive_errors += 1
             log.error("Error getting device params", device_id=device.device_id,
                       error=str(e), consecutive_errors=consecutive_errors)
+            if consecutive_errors >= REBIND_AFTER_ERRORS:
+                consecutive_errors = _attempt_rebind(device, consecutive_errors, stop_event)
             error_delay = min(
                 polling_interval,
                 ERROR_BACKOFF_BASE * (2 ** min(consecutive_errors, ERROR_BACKOFF_MAX_EXPONENT)),
@@ -116,7 +135,7 @@ def _poll_device_params(
             break
 
 
-def _on_mqtt_message(client, userdata, msg) -> None:
+def _on_mqtt_message(client, _userdata, msg) -> None:
     try:
         with _registry_lock:
             device = _device_registry.get(msg.topic)

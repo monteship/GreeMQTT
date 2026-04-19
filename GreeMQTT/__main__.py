@@ -10,7 +10,7 @@ from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import create_mqtt_client, shutdown_mqtt
 from GreeMQTT.mqtt_handler import start_cleanup_task, start_device_tasks
 
-REDISCOVERY_INTERVAL = 300  # Re-scan for new devices every 5 minutes
+REDISCOVERY_INTERVAL = 300
 
 
 class GreeMQTTApp:
