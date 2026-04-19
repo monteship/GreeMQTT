@@ -13,31 +13,37 @@ from GreeMQTT.mqtt_client import subscribe_topic
 _device_registry: dict[str, Device] = {}
 _registry_lock = threading.Lock()
 
+_device_threads: dict[str, threading.Thread] = {}
+_threads_lock = threading.Lock()
+
 adaptive_polling_manager = AdaptivePollingManager(settings.adaptive_polling_timeout, settings.adaptive_fast_interval)
 
 _on_message_set = False
 ERROR_BACKOFF_BASE = 0.5
-ERROR_BACKOFF_MAX_EXPONENT = 4
+ERROR_BACKOFF_MAX_EXPONENT = 6
 REBIND_AFTER_ERRORS = 3
+REBIND_COOLDOWN_BASE = 30.0
+REBIND_COOLDOWN_MAX = 300.0
+MAX_REBIND_ATTEMPTS = 5  # After this many failed rebinds, thread exits
 
 
 def interruptible_sleep(duration: float, stop_event: threading.Event) -> bool:
     return stop_event.wait(timeout=duration)
 
 
-def _attempt_rebind(device: Device, consecutive_errors: int, stop_event: threading.Event) -> int:
-    """Attempt to rebind a device after consecutive failures. Returns updated error count."""
+def _attempt_rebind(device: Device, consecutive_errors: int, stop_event: threading.Event) -> tuple[int, float]:
+    """Attempt to rebind a device after consecutive failures. Returns (updated error count, next_rebind_at)."""
     log.warning("Attempting rebind after consecutive errors",
                 device_id=device.device_id, consecutive_errors=consecutive_errors)
-    backoff = min(30.0, ERROR_BACKOFF_BASE * (2 ** min(consecutive_errors, ERROR_BACKOFF_MAX_EXPONENT)))
-    if stop_event.wait(timeout=backoff):
-        return consecutive_errors
     result = device.bind()
     if result:
         log.info("Rebind succeeded", device_id=device.device_id)
-        return 0
+        return 0, 0.0
     log.error("Rebind failed", device_id=device.device_id)
-    return consecutive_errors
+    cooldown = min(REBIND_COOLDOWN_MAX, REBIND_COOLDOWN_BASE * (2 ** min(consecutive_errors // REBIND_AFTER_ERRORS, 4)))
+    next_rebind_at = time.time() + cooldown
+    log.info("Next rebind attempt scheduled", device_id=device.device_id, cooldown_seconds=cooldown)
+    return consecutive_errors, next_rebind_at
 
 
 def start_device_tasks(
@@ -46,11 +52,15 @@ def start_device_tasks(
     stop_event: threading.Event,
 ):
     threading.Thread(target=device.synchronize_time, daemon=True).start()
-    threading.Thread(
+    t = threading.Thread(
         target=_poll_device_params,
         args=(device, mqtt_client, stop_event),
         daemon=True,
-    ).start()
+    )
+    t.start()
+
+    with _threads_lock:
+        _device_threads[device.device_id] = t
 
     set_topic = device.set_topic
     with _registry_lock:
@@ -70,6 +80,13 @@ def start_cleanup_task(stop_event: threading.Event):
     threading.Thread(target=_cleanup_loop, args=(stop_event,), daemon=True).start()
 
 
+def is_device_thread_alive(device_id: str) -> bool:
+    """Check if a device has an active polling thread."""
+    with _threads_lock:
+        thread = _device_threads.get(device_id)
+        return thread is not None and thread.is_alive()
+
+
 def _cleanup_loop(stop_event: threading.Event):
     while not stop_event.is_set():
         interruptible_sleep(1, stop_event)
@@ -86,10 +103,19 @@ def _poll_device_params(
     last_publish_time: float = 0.0
     consecutive_errors = 0
     keep_alive_interval = 60.0
+    next_rebind_at: float = 0.0
+    rebind_attempts = 0
 
     while not stop_event.is_set():
         polling_interval = adaptive_polling_manager.get_polling_interval(device.device_id)
 
+        # Apply backoff when device is consistently unreachable
+        if consecutive_errors > 0:
+            error_delay = min(
+                60.0,
+                ERROR_BACKOFF_BASE * (2 ** min(consecutive_errors, ERROR_BACKOFF_MAX_EXPONENT)),
+            )
+            polling_interval = max(polling_interval, error_delay)
 
         try:
             params = device.get_param()
@@ -109,30 +135,40 @@ def _poll_device_params(
                     else:
                         log.debug("Publishing params (keep-alive)", topic=params_topic)
                 consecutive_errors = 0
+                next_rebind_at = 0.0
+                rebind_attempts = 0
             else:
                 consecutive_errors += 1
                 log.warning("No params returned from device", device_id=device.device_id,
                             consecutive_errors=consecutive_errors)
-                if consecutive_errors >= REBIND_AFTER_ERRORS:
-                    consecutive_errors = _attempt_rebind(device, consecutive_errors, stop_event)
+                if consecutive_errors >= REBIND_AFTER_ERRORS and time.time() >= next_rebind_at:
+                    rebind_attempts += 1
+                    if rebind_attempts > MAX_REBIND_ATTEMPTS:
+                        log.error("Device considered dead, stopping thread",
+                                  device_id=device.device_id, rebind_attempts=rebind_attempts)
+                        break
+                    consecutive_errors, next_rebind_at = _attempt_rebind(device, consecutive_errors, stop_event)
 
         except Exception as e:
             consecutive_errors += 1
             log.error("Error getting device params", device_id=device.device_id,
                       error=str(e), consecutive_errors=consecutive_errors)
-            if consecutive_errors >= REBIND_AFTER_ERRORS:
-                consecutive_errors = _attempt_rebind(device, consecutive_errors, stop_event)
-            error_delay = min(
-                polling_interval,
-                ERROR_BACKOFF_BASE * (2 ** min(consecutive_errors, ERROR_BACKOFF_MAX_EXPONENT)),
-            )
-            if interruptible_sleep(error_delay, stop_event):
-                break
-            continue
+            if consecutive_errors >= REBIND_AFTER_ERRORS and time.time() >= next_rebind_at:
+                rebind_attempts += 1
+                if rebind_attempts > MAX_REBIND_ATTEMPTS:
+                    log.error("Device considered dead, stopping thread",
+                              device_id=device.device_id, rebind_attempts=rebind_attempts)
+                    break
+                consecutive_errors, next_rebind_at = _attempt_rebind(device, consecutive_errors, stop_event)
 
         if interruptible_sleep(polling_interval, stop_event):
             log.info("Device polling stopped", device_id=device.device_id)
             break
+
+    # Clean up thread tracking so rediscovery can restart this device
+    with _threads_lock:
+        _device_threads.pop(device.device_id, None)
+    log.info("Device thread exited", device_id=device.device_id)
 
 
 def _on_mqtt_message(client, _userdata, msg) -> None:

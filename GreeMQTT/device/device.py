@@ -137,8 +137,11 @@ class Device:
             log.error("Failed to synchronize time with device", device_id=self.device_id)
 
     @classmethod
-    def from_scan_response(cls, raw_data: bytes, ip_address: str) -> Self | None:
-        """Create and bind a Device from a raw broadcast scan response."""
+    def from_scan_response(cls, raw_data: bytes, ip_address: str, skip_bind_ids: set[str] | None = None) -> Self | None:
+        """Create and bind a Device from a raw broadcast scan response.
+
+        If skip_bind_ids is provided, devices with those IDs will not be bound (returns None).
+        """
         raw_json = raw_data[: raw_data.rfind(b"}") + 1]
         try:
             response = json.loads(raw_json)
@@ -152,6 +155,10 @@ class Device:
         cid: str | None = decrypted.get("cid", response.get("cid")) or decrypted.get("mac")
         if not cid:
             log.error("Device ID (cid) not found in response", response=decrypted)
+            return None
+
+        if skip_bind_ids and cid in skip_bind_ids:
+            log.debug("Skipping bind for already active device", device_id=cid)
             return None
 
         if not is_GCM and "ver" in decrypted:
@@ -172,12 +179,12 @@ class Device:
         return cls.from_scan_response(result, ip_address)
 
     @classmethod
-    def discover_all(cls, broadcast_address: str = "192.168.1.255") -> list[Self]:
+    def discover_all(cls, broadcast_address: str = "192.168.1.255", skip_bind_ids: set[str] | None = None) -> list[Self]:
         """Discover all Gree devices on the network via a single UDP broadcast."""
         responses = DeviceCommunicator.broadcast_discovery(broadcast_address)
         devices: list[Self] = []
         for raw_data, ip in responses:
-            device = cls.from_scan_response(raw_data, ip)
+            device = cls.from_scan_response(raw_data, ip, skip_bind_ids=skip_bind_ids)
             if device:
                 devices.append(device)
         return devices
