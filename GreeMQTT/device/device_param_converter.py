@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
-from typing import Any, Dict
+from typing import Any
 
-CONVERT_PARAMS: Dict[str, Dict[int, str]] = {
+CONVERT_PARAMS: dict[str, dict[int, str]] = {
     "Mod": {
         0: "auto",
         1: "cool",
@@ -49,22 +49,26 @@ SIMPLE_STATE = ["Pow", "Air", "Blo", "Health", "SwhSlp", "Lig", "Quiet", "Tur", 
 for KEY in SIMPLE_STATE:
     CONVERT_PARAMS[KEY] = {0: "off", 1: "on"}
 
+INVERSE_PARAMS: dict[str, dict[str, int]] = {
+    key: {v: k for k, v in mapping.items()}
+    for key, mapping in CONVERT_PARAMS.items()
+}
+
 
 class DeviceParamConverter:
 
     @staticmethod
-    def to_device(params: Dict[str, Any]) -> Dict[str, Any]:
+    def to_device(params: dict[str, Any]) -> dict[str, Any]:
         result = params.copy()
         for key, value in params.items():
-            if key in CONVERT_PARAMS:
-                inv_map = {v: k for k, v in CONVERT_PARAMS[key].items()}
-                result[key] = inv_map.get(value, value)
+            if key in INVERSE_PARAMS:
+                result[key] = INVERSE_PARAMS[key].get(value, value)
             else:
                 result[key] = value
         return result
 
     @staticmethod
-    def from_device(params: Dict[str, Any]) -> Dict[str, Any]:
+    def from_device(params: dict[str, Any]) -> dict[str, Any]:
         result = params.copy()
         for key, value in params.items():
             if key in CONVERT_PARAMS:

@@ -1,6 +1,5 @@
 import threading
 import time
-from typing import Dict
 
 from GreeMQTT.config import settings
 from GreeMQTT.logger import log
@@ -14,7 +13,8 @@ class AdaptivePollingManager:
             raise ValueError("fast_interval must be positive")
         self.duration_seconds = duration_seconds
         self.fast_interval = fast_interval
-        self._device_states: Dict[str, float] = {}
+        self._device_states: dict[str, float] = {}
+        self._immediate_until: dict[str, float] = {}
         self._lock = threading.Lock()
 
     def trigger_adaptive_polling(self, device_id: str) -> None:
@@ -30,6 +30,11 @@ class AdaptivePollingManager:
 
     def get_polling_interval(self, device_id: str) -> float:
         with self._lock:
+            # Check immediate (ultra-fast) polling first
+            immediate_until = self._immediate_until.get(device_id, 0)
+            if time.time() < immediate_until:
+                return 0.1
+
             if device_id not in self._device_states:
                 return settings.update_interval
 
@@ -67,9 +72,7 @@ class AdaptivePollingManager:
 
     def force_immediate_polling(self, device_id: str, duration: float = 5.0) -> None:
         with self._lock:
-            current_time = time.time()
-            self._device_states[device_id] = current_time
-
+            self._immediate_until[device_id] = time.time() + duration
             log.debug(
                 "Forced immediate polling",
                 device_id=device_id,

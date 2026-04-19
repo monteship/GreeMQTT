@@ -7,11 +7,14 @@ Bridge Gree air conditioners to MQTT for integration with Home Assistant and oth
 ## Features
 
 - Automatic device discovery on the local network
+- **Periodic rediscovery** — devices that come online later are picked up automatically
+- **Home Assistant MQTT Auto-Discovery** — climate entities appear without manual config
 - MQTT-based control for setting and retrieving device parameters
-- Adaptive multi-tier polling (0.1s → 0.3s → 0.8s → 3s) based on activity
+- Adaptive multi-tier polling (0.1s → 0.8s → 3s) based on activity
 - Sub-second command response times (typically 50–150ms)
 - Concurrent processing of multiple MQTT commands
 - Immediate state publishing after parameter changes
+- **Configurable log level** via `LOG_LEVEL` env var
 - Configuration via environment variables or `.env` file
 - Multi-platform Docker support (amd64, arm64, arm/v7)
 
@@ -60,6 +63,9 @@ ADAPTIVE_POLLING_TIMEOUT=45        # Adaptive polling duration (seconds)
 ADAPTIVE_FAST_INTERVAL=0.8         # Fast polling interval (seconds)
 EVENT_QUEUE_WORKERS=5              # Concurrent event workers
 IMMEDIATE_RESPONSE_TIMEOUT=5       # Ultra-fast polling after commands (seconds)
+
+# Optional — Logging
+LOG_LEVEL=INFO                     # DEBUG, INFO, WARNING, ERROR
 ```
 
 ### Tuning Tips
@@ -89,7 +95,9 @@ gree/device3/set {"WdSpd":"auto"}
 
 ### Home Assistant
 
-See the example configuration: [mqtt.yaml](https://github.com/monteship/GreeMQTT/blob/master/mqtt.yaml)
+Devices are **automatically discovered** via MQTT Discovery — no manual YAML configuration needed. Climate entities, binary sensors for turbo/quiet/health/light/sleep modes will appear in Home Assistant automatically.
+
+For manual configuration, see: [mqtt.yaml](https://github.com/monteship/GreeMQTT/blob/master/mqtt.yaml)
 
 ## Docker
 

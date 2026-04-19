@@ -1,6 +1,6 @@
 import base64
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 from Cryptodome.Cipher import AES
 
@@ -16,7 +16,7 @@ def _pkcs7_pad(data: str) -> str:
     return data + chr(length) * length
 
 
-def encrypt(pack: str, key: Optional[str] = None, is_GCM: bool = False) -> Dict[str, str]:
+def encrypt(pack: str, key: str | None = None, is_GCM: bool = False) -> dict[str, str]:
     if is_GCM:
         k = (key or GENERIC_GCM_KEY).encode("utf-8")
         cipher = AES.new(k, AES.MODE_GCM, nonce=GCM_IV)
@@ -34,7 +34,7 @@ def encrypt(pack: str, key: Optional[str] = None, is_GCM: bool = False) -> Dict[
         return {"pack": base64.b64encode(encrypted).decode("utf-8")}
 
 
-def decrypt(response: Dict, key: Optional[str] = None, is_GCM: bool = False) -> Dict[str, Any]:
+def decrypt(response: dict, key: str | None = None, is_GCM: bool = False) -> dict[str, Any]:
     if is_GCM or "tag" in response:
         k = (key or GENERIC_GCM_KEY).encode("utf-8")
         cipher = AES.new(k, AES.MODE_GCM, nonce=GCM_IV)

@@ -5,14 +5,19 @@ import threading
 
 from GreeMQTT.config import settings
 from GreeMQTT.device.device import Device
+from GreeMQTT.ha_discovery import publish_ha_discovery
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import create_mqtt_client, shutdown_mqtt
 from GreeMQTT.mqtt_handler import start_cleanup_task, start_device_tasks
+
+REDISCOVERY_INTERVAL = 300  # Re-scan for new devices every 5 minutes
 
 
 class GreeMQTTApp:
     def __init__(self):
         self.stop_event = threading.Event()
+        self._known_device_ids: set[str] = set()
+        self._mqtt_client = None
 
     def setup_signal_handlers(self):
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -55,26 +60,51 @@ class GreeMQTTApp:
 
         return discovered
 
-    def discover_and_setup_devices(self):
-        mqtt_client = create_mqtt_client()
-        devices = self.discover_devices()
+    def _setup_device(self, device: Device) -> bool:
+        """Set up a single device: start tasks, publish HA discovery. Returns True on success."""
+        if device.device_id in self._known_device_ids:
+            return False
+        try:
+            start_device_tasks(device, self._mqtt_client, self.stop_event)
+            publish_ha_discovery(device, self._mqtt_client)
+            self._known_device_ids.add(device.device_id)
+            log.info("Started device", ip=device.device_ip, id=device.device_id, name=device.name)
+            return True
+        except Exception as e:
+            log.error("Failed to setup device", ip=device.device_ip, error=str(e))
+            return False
 
+    def discover_and_setup_devices(self) -> int:
+        """Discover and set up new devices. Returns count of newly added devices."""
+        devices = self.discover_devices()
         if not devices:
             log.warning("No devices found")
-            return
+            return 0
+        added = sum(1 for d in devices if self._setup_device(d))
+        return added
 
-        for device in devices:
+    def _rediscovery_loop(self):
+        """Periodically scan for new devices that may have come online."""
+        while not self.stop_event.is_set():
+            if self.stop_event.wait(timeout=REDISCOVERY_INTERVAL):
+                break
+            log.debug("Running periodic device rediscovery")
             try:
-                start_device_tasks(device, mqtt_client, self.stop_event)
-                log.info("Started device", ip=device.device_ip, id=device.device_id)
+                added = self.discover_and_setup_devices()
+                if added:
+                    log.info("Rediscovery found new devices", count=added)
             except Exception as e:
-                log.error("Failed to setup device", ip=device.device_ip, error=str(e))
+                log.error("Rediscovery error", error=str(e))
 
     def run(self):
         self.setup_signal_handlers()
         try:
+            self._mqtt_client = create_mqtt_client()
             self.discover_and_setup_devices()
             start_cleanup_task(self.stop_event)
+
+            threading.Thread(target=self._rediscovery_loop, daemon=True).start()
+
             log.info("Application running - press Ctrl+C to stop")
             self.stop_event.wait()
         except Exception as e:

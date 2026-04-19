@@ -1,7 +1,7 @@
 import datetime
 import json
 import re
-from typing import Dict, Optional, Self
+from typing import Self
 
 from GreeMQTT.config import settings
 from GreeMQTT.device.device_communication import DeviceCommunicator
@@ -19,7 +19,7 @@ class Device:
         device_id: str,
         name: str,
         is_GCM: bool = False,
-        key: Optional[str] = None,
+        key: str | None = None,
     ):
         self.device_ip = device_ip
         self.device_id = device_id
@@ -37,7 +37,10 @@ class Device:
         return f"{self.topic}/set"
 
     def __str__(self):
-        return f"Device(device_ip={self.device_ip}, device_id={self.device_id}, is_GCM={self.is_GCM})"
+        return f"Device(ip={self.device_ip}, id={self.device_id}, name={self.name}, GCM={self.is_GCM})"
+
+    def __repr__(self):
+        return self.__str__()
 
     def _encrypt(self, pack: str) -> dict:
         return encrypt(pack, self.key, self.is_GCM)
@@ -50,16 +53,16 @@ class Device:
         request.update(self._encrypt(pack))
         return json.dumps(request)
 
-    def _decrypt_response(self, response: dict) -> Dict[str, str | int]:
+    def _decrypt_response(self, response: dict) -> dict[str, str | int]:
         decrypted = self._decrypt(response)
         if "cols" not in decrypted:
             return decrypted
         return dict(zip(decrypted["cols"], decrypted["dat"]))
 
-    def _send(self, request: bytes) -> Optional[bytes]:
+    def _send(self, request: bytes) -> bytes | None:
         return self.communicator.send_data(request)
 
-    def bind(self, max_retries: int = DEVICE_BIND_MAX_RETRIES) -> Optional[Self]:
+    def bind(self, max_retries: int = DEVICE_BIND_MAX_RETRIES) -> Self | None:
         log.info("Binding to device", device=self.device_id)
         for retry in range(max_retries):
             pack = json.dumps({"mac": self.device_id, "t": "bind", "uid": 0})
@@ -96,7 +99,7 @@ class Device:
         log.error("Bind failed after maximum retries", device_id=self.device_id)
         return None
 
-    def get_param(self) -> Optional[Dict]:
+    def get_param(self) -> dict | None:
         cols = ",".join(f'"{p}"' for p in settings.tracking_params_list)
         status_pack = f'{{"cols":[{cols}],"mac":"{self.device_id}","t":"status"}}'
         request = self._encrypt_request(status_pack)
@@ -134,7 +137,7 @@ class Device:
             log.error("Failed to synchronize time with device", device_id=self.device_id)
 
     @classmethod
-    def from_scan_response(cls, raw_data: bytes, ip_address: str) -> Optional[Self]:
+    def from_scan_response(cls, raw_data: bytes, ip_address: str) -> Self | None:
         """Create and bind a Device from a raw broadcast scan response."""
         raw_json = raw_data[: raw_data.rfind(b"}") + 1]
         try:
@@ -161,7 +164,7 @@ class Device:
         return device.bind()
 
     @classmethod
-    def search_devices(cls, ip_address: str) -> Optional[Self]:
+    def search_devices(cls, ip_address: str) -> Self | None:
         log.info("Searching for device", ip_address=ip_address)
         result = DeviceCommunicator.broadcast_scan(ip_address)
         if not result:

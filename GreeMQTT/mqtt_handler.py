@@ -1,7 +1,6 @@
 import json
 import threading
 import time
-from typing import Optional
 
 import paho.mqtt.client as paho_mqtt
 
@@ -17,6 +16,7 @@ _registry_lock = threading.Lock()
 
 adaptive_polling_manager = AdaptivePollingManager(settings.adaptive_polling_timeout, settings.adaptive_fast_interval)
 
+_on_message_set = False
 ERROR_BACKOFF_BASE = 0.5
 ERROR_BACKOFF_MAX_EXPONENT = 4
 
@@ -42,7 +42,11 @@ def start_device_tasks(
         _device_registry[set_topic] = device
 
     subscribe_topic(set_topic, qos=settings.mqtt_qos)
-    mqtt_client.on_message = _on_mqtt_message
+
+    global _on_message_set
+    if not _on_message_set:
+        mqtt_client.on_message = _on_mqtt_message
+        _on_message_set = True
 
     log.info("Started tasks for device", device=str(device), topic=set_topic)
 
@@ -63,7 +67,7 @@ def _poll_device_params(
     stop_event: threading.Event,
 ):
     params_topic = device.topic
-    last_params: Optional[dict] = None
+    last_params: dict | None = None
     last_publish_time: float = 0.0
     consecutive_errors = 0
     keep_alive_interval = 60.0
@@ -71,11 +75,6 @@ def _poll_device_params(
     while not stop_event.is_set():
         polling_interval = adaptive_polling_manager.get_polling_interval(device.device_id)
 
-        # Ultra-fast polling for first 10s after a command
-        if adaptive_polling_manager.is_adaptive_polling_active(device.device_id):
-            state_time = adaptive_polling_manager._device_states.get(device.device_id, 0)
-            if time.time() - state_time < 10:
-                polling_interval = min(polling_interval, 0.5)
 
         try:
             params = device.get_param()

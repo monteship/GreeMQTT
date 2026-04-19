@@ -1,7 +1,6 @@
 import os
 import socket
 import time
-from typing import Optional
 
 from GreeMQTT.logger import log
 
@@ -20,7 +19,7 @@ class DeviceCommunicator:
         self,
         request: bytes,
         udp_port: int = UDP_PORT,
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         last_error: Exception | None = None
         for attempt in range(MAX_RETRIES):
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -47,7 +46,7 @@ class DeviceCommunicator:
     def broadcast_scan(
         target_ip: str,
         udp_port: int = UDP_PORT,
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         """Send a scan packet to a single IP and return the response."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.settimeout(SOCKET_TIMEOUT)
