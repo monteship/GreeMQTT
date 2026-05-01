@@ -67,7 +67,7 @@ class DeviceCommunicator:
 
     @staticmethod
     def broadcast_discovery(
-        broadcast_address: str = "192.168.1.255",
+        broadcast_address: str,
         udp_port: int = UDP_PORT,
         timeout: float = BROADCAST_SCAN_TIMEOUT,
     ) -> list[tuple[bytes, str]]:
