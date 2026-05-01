@@ -30,51 +30,32 @@ class AdaptivePollingManager:
 
     def get_polling_interval(self, device_id: str) -> float:
         with self._lock:
-            # Check immediate (ultra-fast) polling first
+            now = time.time()
+
             immediate_until = self._immediate_until.get(device_id, 0)
-            if time.time() < immediate_until:
+            if now < immediate_until:
                 return 0.1
+            if immediate_until:
+                del self._immediate_until[device_id]
 
-            if device_id not in self._device_states:
+            trigger_time = self._device_states.get(device_id)
+            if trigger_time is None:
                 return settings.update_interval
 
-            trigger_time = self._device_states[device_id]
-            current_time = time.time()
-            time_since_trigger = current_time - trigger_time
-
-            if time_since_trigger < self.duration_seconds:
+            if now - trigger_time < self.duration_seconds:
                 return self.fast_interval
-            else:
-                del self._device_states[device_id]
-                log.debug(
-                    "Adaptive polling expired, returning to normal",
-                    device_id=device_id,
-                    normal_interval=settings.update_interval,
-                )
-                return settings.update_interval
+
+            del self._device_states[device_id]
+            log.debug("Adaptive polling expired, returning to normal",
+                      device_id=device_id, normal_interval=settings.update_interval)
+            return settings.update_interval
 
     def is_adaptive_polling_active(self, device_id: str) -> bool:
-        interval = self.get_polling_interval(device_id)
-        return interval == self.fast_interval
-
-    def cleanup_expired_states(self) -> None:
         with self._lock:
-            current_time = time.time()
-            expired_devices = []
-
-            for device_id, trigger_time in self._device_states.items():
-                if current_time - trigger_time >= self.duration_seconds:
-                    expired_devices.append(device_id)
-
-            for device_id in expired_devices:
-                del self._device_states[device_id]
-                log.debug("Cleaned up expired adaptive polling state", device_id=device_id)
+            trigger_time = self._device_states.get(device_id)
+            return trigger_time is not None and time.time() - trigger_time < self.duration_seconds
 
     def force_immediate_polling(self, device_id: str, duration: float = 5.0) -> None:
         with self._lock:
             self._immediate_until[device_id] = time.time() + duration
-            log.debug(
-                "Forced immediate polling",
-                device_id=device_id,
-                duration=duration,
-            )
+            log.debug("Forced immediate polling", device_id=device_id, duration=duration)

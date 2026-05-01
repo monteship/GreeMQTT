@@ -19,7 +19,6 @@ _threads_lock = threading.Lock()
 
 adaptive_polling_manager = AdaptivePollingManager(settings.adaptive_polling_timeout, settings.adaptive_fast_interval)
 
-_on_message_set = False
 ERROR_BACKOFF_BASE = 0.5
 ERROR_BACKOFF_MAX_EXPONENT = 6
 REBIND_AFTER_ERRORS = 3
@@ -68,17 +67,10 @@ def start_device_tasks(
         _device_registry[set_topic] = device
 
     subscribe_topic(set_topic, qos=settings.mqtt_qos)
-
-    global _on_message_set
-    if not _on_message_set:
-        mqtt_client.on_message = _on_mqtt_message
-        _on_message_set = True
+    mqtt_client.on_message = _on_mqtt_message
 
     log.info("Started tasks for device", device=str(device), topic=set_topic)
 
-
-def start_cleanup_task(stop_event: threading.Event):
-    threading.Thread(target=_cleanup_loop, args=(stop_event,), daemon=True).start()
 
 
 def is_device_thread_alive(device_id: str) -> bool:
@@ -87,11 +79,6 @@ def is_device_thread_alive(device_id: str) -> bool:
         thread = _device_threads.get(device_id)
         return thread is not None and thread.is_alive()
 
-
-def _cleanup_loop(stop_event: threading.Event):
-    while not stop_event.is_set():
-        interruptible_sleep(1, stop_event)
-        adaptive_polling_manager.cleanup_expired_states()
 
 
 def _poll_device_params(

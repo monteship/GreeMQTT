@@ -1,4 +1,5 @@
 from functools import lru_cache
+
 from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,7 +37,6 @@ class AppSettings(BaseSettings):
     adaptive_fast_interval: float = Field(default=0.8, alias="ADAPTIVE_FAST_INTERVAL")
 
     # --- Event queue ---
-    event_queue_workers: int = Field(default=5, alias="EVENT_QUEUE_WORKERS")
     immediate_response_timeout: float = Field(default=5.0, alias="IMMEDIATE_RESPONSE_TIMEOUT")
 
     # --- Tracking params ---

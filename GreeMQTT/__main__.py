@@ -8,7 +8,7 @@ from GreeMQTT.device.device import Device
 from GreeMQTT.ha_discovery import publish_ha_discovery
 from GreeMQTT.logger import log
 from GreeMQTT.mqtt_client import create_mqtt_client, shutdown_mqtt
-from GreeMQTT.mqtt_handler import start_cleanup_task, start_device_tasks, is_device_thread_alive
+from GreeMQTT.mqtt_handler import is_device_thread_alive, start_device_tasks
 
 REDISCOVERY_INTERVAL = 300
 FAST_RECONNECT_DELAY = 10  # seconds to wait before fast reconnect attempt
@@ -32,16 +32,11 @@ class GreeMQTTApp:
 
     @staticmethod
     def _get_broadcast_address() -> str:
-        network_list = settings.network_list
-        if network_list:
-            for item in network_list:
-                if "/" in item:
-                    return str(ipaddress.IPv4Network(item, strict=False).broadcast_address)
-            return ""
+        for item in settings.network_list:
+            if "/" in item:
+                return str(ipaddress.IPv4Network(item, strict=False).broadcast_address)
+        return ""
 
-        import os
-        subnet = os.environ.get("SUBNET", "192.168.1.0/24")
-        return str(ipaddress.IPv4Network(subnet, strict=False).broadcast_address)
 
     def discover_devices(self) -> list[Device]:
         """Discover devices via broadcast and/or specific IPs."""
@@ -159,7 +154,6 @@ class GreeMQTTApp:
         try:
             self._mqtt_client = create_mqtt_client()
             self.discover_and_setup_devices()
-            start_cleanup_task(self.stop_event)
 
             threading.Thread(target=self._rediscovery_loop, daemon=True).start()
 
