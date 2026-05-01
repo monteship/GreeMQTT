@@ -31,4 +31,4 @@ ENTRYPOINT []
 
 USER nonroot
 
-CMD ["/app/.venv/bin/python", "-m", "GreeMQTT"]
+CMD ["uv", "run", "GreeMQTT"]
