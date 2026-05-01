@@ -34,6 +34,12 @@ GreeMQTT = "GreeMQTT.__main__:main"
 [tool.uv]
 package = true
 
+[dependency-groups]
+dev = [
+    "ruff>=0.15.12",
+    "ty>=0.0.33",
+]
+
 [tool.ruff]
 line-length = 120
 indent-width = 4

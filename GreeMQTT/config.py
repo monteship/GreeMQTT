@@ -101,3 +101,4 @@ def get_settings() -> AppSettings:
 
 
 settings = get_settings()
+

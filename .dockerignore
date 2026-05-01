@@ -1,3 +1,5 @@
-.env
 /logs/
 /devices.db
+/.venv
+/.github
+/GreeMQTT.egg-info

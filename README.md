@@ -37,6 +37,8 @@ python -m pip install -e .
 python -m GreeMQTT
 ```
 
+`pip install -e .` installs runtime dependencies only. Development tools (`ruff`, `ty`) are in the `dev` dependency group.
+
 ## Configuration
 
 Create a `.env` file:
@@ -139,6 +141,16 @@ If discovery works on the host but not in Docker:
 ## Contributing
 
 Contributions welcome! For major changes, please open an issue first.
+
+### Development Setup
+
+```bash
+uv sync --group dev
+uv run ruff check .
+uv run ty
+```
+
+This project keeps lint/type tooling in the `dev` dependency group so production installs stay minimal.
 
 ## License
 
