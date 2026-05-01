@@ -42,15 +42,15 @@ class GreeMQTTApp:
 
         # Probe specific IPs from config + unicast retry for any dead known devices
         discovered_ips = {d.device_ip for d in discovered}
-        probe_ips: dict[str, str | None] = {}  # ip -> device_id (None if from config)
+        probe_ips: set[str] = set()
         for ip in settings.network_list:
             if "/" not in ip and ip not in discovered_ips:
-                probe_ips[ip] = None
+                probe_ips.add(ip)
         for did, dev in self._known_devices.items():
             if did not in active_ids and dev.device_ip not in discovered_ips:
-                probe_ips[dev.device_ip] = did
+                probe_ips.add(dev.device_ip)
 
-        for ip, known_id in probe_ips.items():
+        for ip in probe_ips:
             try:
                 device = Device.search_devices(ip)
                 if device and device.key and device.device_id not in active_ids:
