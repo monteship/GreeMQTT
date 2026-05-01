@@ -19,7 +19,7 @@ class AppSettings(BaseSettings):
     )
 
     # --- Network ---
-    network: str = Field(default="", alias="NETWORK")
+    network: str = Field(default="192.168.1.0/24", alias="NETWORK")
 
     # --- MQTT ---
     mqtt_broker: str = Field(default="", alias="MQTT_BROKER")
