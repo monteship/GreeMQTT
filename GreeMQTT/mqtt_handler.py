@@ -32,8 +32,8 @@ def start_device_tasks(device: Device, mqtt_client: paho_mqtt.Client, stop_event
         _device_threads[device.device_id] = t
         _device_registry[device.set_topic] = device
 
-    subscribe_topic(device.set_topic, qos=settings.mqtt_qos)
     mqtt_client.on_message = _on_mqtt_message
+    subscribe_topic(device.set_topic, qos=settings.mqtt_qos)
     log.info("Started tasks for device", device=str(device), topic=device.set_topic)
 
 
