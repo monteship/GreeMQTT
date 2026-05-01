@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . /app
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen
+    uv sync --frozen --no-editable
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
@@ -31,4 +31,4 @@ ENTRYPOINT []
 
 USER nonroot
 
-CMD ["/app/.venv/bin/python", "-m", "GreeMQTT"]
+CMD ["GreeMQTT"]

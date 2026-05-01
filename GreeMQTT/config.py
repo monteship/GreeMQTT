@@ -1,4 +1,5 @@
 from functools import lru_cache
+
 from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,7 +19,7 @@ class AppSettings(BaseSettings):
     )
 
     # --- Network ---
-    network: str = Field(default="", alias="NETWORK")
+    network: str = Field(default="192.168.1.0/24", alias="NETWORK")
 
     # --- MQTT ---
     mqtt_broker: str = Field(default="", alias="MQTT_BROKER")
@@ -32,12 +33,6 @@ class AppSettings(BaseSettings):
 
     # --- Polling ---
     update_interval: int = Field(default=3, alias="UPDATE_INTERVAL")
-    adaptive_polling_timeout: int = Field(default=45, alias="ADAPTIVE_POLLING_TIMEOUT")
-    adaptive_fast_interval: float = Field(default=0.8, alias="ADAPTIVE_FAST_INTERVAL")
-
-    # --- Event queue ---
-    event_queue_workers: int = Field(default=5, alias="EVENT_QUEUE_WORKERS")
-    immediate_response_timeout: float = Field(default=5.0, alias="IMMEDIATE_RESPONSE_TIMEOUT")
 
     # --- Tracking params ---
     tracking_params: str = Field(default="", alias="TRACKING_PARAMS")
@@ -101,3 +96,4 @@ def get_settings() -> AppSettings:
 
 
 settings = get_settings()
+
