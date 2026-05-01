@@ -6,17 +6,18 @@ Bridge Gree air conditioners to MQTT for integration with Home Assistant and oth
 
 ## Features
 
-- Automatic device discovery on the local network
+- Automatic device discovery via subnet broadcast or specific IPs
 - **Periodic rediscovery** — devices that come online later are picked up automatically
-- **Home Assistant MQTT Auto-Discovery** — climate entities appear without manual config
+- **Home Assistant MQTT Auto-Discovery** — climate entity + binary sensors appear without manual config
 - MQTT-based control for setting and retrieving device parameters
-- Adaptive multi-tier polling (0.1s → 0.8s → 3s) based on activity
-- Sub-second command response times (typically 50–150ms)
-- Concurrent processing of multiple MQTT commands
-- Immediate state publishing after parameter changes
+- Fixed-interval polling with exponential error backoff (up to 60 s)
+- Keep-alive state publish every 60 s even when parameters are unchanged
+- Immediate state publish after parameter changes
+- **Configurable tracking params** via `TRACKING_PARAMS` env var
 - **Configurable log level** via `LOG_LEVEL` env var
 - Configuration via environment variables or `.env` file
-- Multi-platform Docker support (amd64, arm64, arm/v7)
+- Runs as non-root user inside Docker
+- Multi-platform Docker support (amd64, arm64)
 
 ## Quick Start
 
@@ -48,7 +49,8 @@ Create a `.env` file:
 MQTT_BROKER=192.168.1.50
 
 # Optional — Network
-NETWORK=192.168.1.100,192.168.1.101  # Leave empty for auto-discovery
+# CIDR subnet for broadcast discovery or comma-separated IPs
+NETWORK=192.168.1.0/24
 
 # Optional — MQTT
 MQTT_PORT=1883
@@ -60,24 +62,33 @@ MQTT_RETAIN=false
 MQTT_KEEP_ALIVE=60
 
 # Optional — Polling & Performance
-UPDATE_INTERVAL=3                  # Normal polling interval (seconds)
-ADAPTIVE_POLLING_TIMEOUT=45        # Adaptive polling duration (seconds)
-ADAPTIVE_FAST_INTERVAL=0.8         # Fast polling interval (seconds)
-EVENT_QUEUE_WORKERS=5              # Concurrent event workers
-IMMEDIATE_RESPONSE_TIMEOUT=5       # Ultra-fast polling after commands (seconds)
+UPDATE_INTERVAL=3              # Polling interval in seconds
+
+# Optional — Tracked Parameters
+# Comma-separated list of device params to poll and publish.
+# Defaults to all standard params when left empty.
+TRACKING_PARAMS=
 
 # Optional — Logging
-LOG_LEVEL=INFO                     # DEBUG, INFO, WARNING, ERROR
+LOG_LEVEL=INFO                 # DEBUG, INFO, WARNING, ERROR
+```
+
+### Default Tracked Parameters
+
+When `TRACKING_PARAMS` is not set the following parameters are tracked:
+
+```
+Pow, Mod, SetTem, TemUn, WdSpd, Air, Blo, Health, SwhSlp, Lig,
+SwingLfRig, SwUpDn, Quiet, Tur, StHt, HeatCoolType, TemRec, SvSt, TemSen
 ```
 
 ### Tuning Tips
 
 | Scenario | Recommendation |
 |---|---|
-| High traffic | Increase `EVENT_QUEUE_WORKERS` to 7–10 |
-| Low latency | Decrease `ADAPTIVE_FAST_INTERVAL` to 0.5 |
-| Resource constrained | Decrease `EVENT_QUEUE_WORKERS` to 3 |
-| Battery powered | Increase `UPDATE_INTERVAL` to 5–10 |
+| Low latency | Decrease `UPDATE_INTERVAL` to 1–2 |
+| Resource constrained | Increase `UPDATE_INTERVAL` to 5–10 |
+| Track fewer params | Set `TRACKING_PARAMS` to only the params you need |
 
 ## Usage
 
@@ -97,7 +108,18 @@ gree/device3/set {"WdSpd":"auto"}
 
 ### Home Assistant
 
-Devices are **automatically discovered** via MQTT Discovery — no manual YAML configuration needed. Climate entities, binary sensors for turbo/quiet/health/light/sleep modes will appear in Home Assistant automatically.
+Devices are **automatically discovered** via MQTT Discovery — no manual YAML configuration needed.
+
+The following entities are created for each device:
+
+| Entity type | Name | Parameter |
+|---|---|---|
+| Climate | *(device name)* | Pow, Mod, SetTem, WdSpd, SwUpDn, TemSen |
+| Binary sensor | Turbo | Tur |
+| Binary sensor | Quiet Mode | Quiet |
+| Binary sensor | Health Mode | Health |
+| Binary sensor | Display Light | Lig |
+| Binary sensor | Sleep Mode | SwhSlp |
 
 For manual configuration, see: [mqtt.yaml](https://github.com/monteship/GreeMQTT/blob/master/mqtt.yaml)
 
@@ -108,6 +130,8 @@ For manual configuration, see: [mqtt.yaml](https://github.com/monteship/GreeMQTT
 ```bash
 docker build -t greemqtt .
 ```
+
+The image is built with [uv](https://github.com/astral-sh/uv) and runs the application as a non-root user.
 
 ### Supported Architectures
 
