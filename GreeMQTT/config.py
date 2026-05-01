@@ -33,11 +33,6 @@ class AppSettings(BaseSettings):
 
     # --- Polling ---
     update_interval: int = Field(default=3, alias="UPDATE_INTERVAL")
-    adaptive_polling_timeout: int = Field(default=45, alias="ADAPTIVE_POLLING_TIMEOUT")
-    adaptive_fast_interval: float = Field(default=0.8, alias="ADAPTIVE_FAST_INTERVAL")
-
-    # --- Event queue ---
-    immediate_response_timeout: float = Field(default=5.0, alias="IMMEDIATE_RESPONSE_TIMEOUT")
 
     # --- Tracking params ---
     tracking_params: str = Field(default="", alias="TRACKING_PARAMS")
