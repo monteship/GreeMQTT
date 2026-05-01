@@ -11,21 +11,27 @@ from GreeMQTT.mqtt_client import create_mqtt_client, shutdown_mqtt
 from GreeMQTT.mqtt_handler import start_cleanup_task, start_device_tasks, is_device_thread_alive
 
 REDISCOVERY_INTERVAL = 300
+FAST_RECONNECT_DELAY = 10  # seconds to wait before fast reconnect attempt
 
 
 class GreeMQTTApp:
     def __init__(self):
         self.stop_event = threading.Event()
+        self._rediscovery_trigger = threading.Event()
         self._known_device_ids: set[str] = set()
+        self._known_devices: dict[str, Device] = {}
         self._mqtt_client = None
 
     def setup_signal_handlers(self):
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda s, f: self.stop_event.set())
 
+    def _on_device_thread_dead(self, device_id: str) -> None:
+        log.info("Device thread dead, triggering fast reconnect", device_id=device_id)
+        self._rediscovery_trigger.set()
+
     @staticmethod
     def _get_broadcast_address() -> str:
-        """Derive the broadcast address from the configured network/subnet."""
         network_list = settings.network_list
         if network_list:
             for item in network_list:
@@ -42,7 +48,6 @@ class GreeMQTTApp:
         broadcast_addr = self._get_broadcast_address()
         discovered: list[Device] = []
 
-        # Skip binding for devices that already have active threads
         active_ids = {
             did for did in self._known_device_ids
             if is_device_thread_alive(did)
@@ -52,7 +57,6 @@ class GreeMQTTApp:
             log.info("Discovering devices via broadcast", broadcast=broadcast_addr)
             discovered.extend(Device.discover_all(broadcast_addr, skip_bind_ids=active_ids))
 
-        # Also try specific IPs from NETWORK config that weren't found via broadcast
         discovered_ips = {d.device_ip for d in discovered}
         specific_ips = [ip for ip in settings.network_list if "/" not in ip and ip not in discovered_ips]
         for ip in specific_ips:
@@ -68,16 +72,18 @@ class GreeMQTTApp:
         return discovered
 
     def _setup_device(self, device: Device) -> bool:
-        """Set up a single device: start tasks, publish HA discovery. Returns True on success."""
         if device.device_id in self._known_device_ids:
-            # Check if the thread is still alive; if not, restart it
             if is_device_thread_alive(device.device_id):
                 return False
             log.info("Device thread dead, restarting", device_id=device.device_id)
         try:
-            start_device_tasks(device, self._mqtt_client, self.stop_event)
+            if not self._mqtt_client:
+                raise RuntimeError("MQTT client not initialized")
+            start_device_tasks(device, self._mqtt_client, self.stop_event,
+                                on_thread_dead=self._on_device_thread_dead)
             publish_ha_discovery(device, self._mqtt_client)
             self._known_device_ids.add(device.device_id)
+            self._known_devices[device.device_id] = device
             log.info("Started device", ip=device.device_ip, id=device.device_id, name=device.name)
             return True
         except Exception as e:
@@ -85,8 +91,6 @@ class GreeMQTTApp:
             return False
 
     def discover_and_setup_devices(self) -> int:
-        """Discover and set up new devices. Returns count of newly added devices."""
-        # Find which devices actually need (re)discovery
         dead_device_ids = {
             did for did in self._known_device_ids
             if not is_device_thread_alive(did)
@@ -102,16 +106,51 @@ class GreeMQTTApp:
         added = sum(1 for d in devices if self._setup_device(d))
         return added
 
-    def _rediscovery_loop(self):
-        """Periodically scan for new devices that may have come online."""
-        while not self.stop_event.is_set():
-            if self.stop_event.wait(timeout=REDISCOVERY_INTERVAL):
-                break
-            log.debug("Running periodic device rediscovery")
+    def _fast_reconnect_dead_devices(self) -> int:
+        dead_device_ids = {
+            did for did in self._known_device_ids
+            if not is_device_thread_alive(did)
+        }
+        if not dead_device_ids:
+            return 0
+
+        added = 0
+        for did in dead_device_ids:
+            known_device = self._known_devices.get(did)
+            if not known_device:
+                continue
             try:
-                added = self.discover_and_setup_devices()
-                if added:
-                    log.info("Rediscovery found new devices", count=added)
+                log.info("Fast reconnect: unicast probe", device_id=did, ip=known_device.device_ip)
+                device = Device.search_devices(known_device.device_ip)
+                if device and device.key:
+                    if self._setup_device(device):
+                        added += 1
+                else:
+                    log.warning("Fast reconnect failed, will retry on next periodic scan",
+                                device_id=did, ip=known_device.device_ip)
+            except Exception as e:
+                log.error("Fast reconnect error", device_id=did, error=str(e))
+        return added
+
+    def _rediscovery_loop(self):
+        while not self.stop_event.is_set():
+            triggered = self._rediscovery_trigger.wait(timeout=REDISCOVERY_INTERVAL)
+            if self.stop_event.is_set():
+                break
+            self._rediscovery_trigger.clear()
+            try:
+                if triggered:
+                    if self.stop_event.wait(timeout=FAST_RECONNECT_DELAY):
+                        break
+                    log.info("Running fast reconnect for dead device(s)")
+                    added = self._fast_reconnect_dead_devices()
+                    if added:
+                        log.info("Fast reconnect restored device(s)", count=added)
+                else:
+                    log.debug("Running periodic device rediscovery")
+                    added = self.discover_and_setup_devices()
+                    if added:
+                        log.info("Rediscovery found new devices", count=added)
             except Exception as e:
                 log.error("Rediscovery error", error=str(e))
 

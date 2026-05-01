@@ -20,8 +20,12 @@ dependencies = [
     { name = "pycryptodomex" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
-    { name = "ruff" },
     { name = "structlog" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
     { name = "ty" },
 ]
 
@@ -31,8 +35,12 @@ requires-dist = [
     { name = "pycryptodomex", specifier = ">=3.22.0" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "python-dotenv", specifier = "==1.2.2" },
-    { name = "ruff", specifier = ">=0.15.12" },
     { name = "structlog", specifier = "==25.5.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "ruff", specifier = ">=0.15.12" },
     { name = "ty", specifier = ">=0.0.33" },
 ]
 

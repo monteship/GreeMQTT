@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+from typing import Callable
 
 import paho.mqtt.client as paho_mqtt
 
@@ -24,7 +25,7 @@ ERROR_BACKOFF_MAX_EXPONENT = 6
 REBIND_AFTER_ERRORS = 3
 REBIND_COOLDOWN_BASE = 30.0
 REBIND_COOLDOWN_MAX = 300.0
-MAX_REBIND_ATTEMPTS = 5  # After this many failed rebinds, thread exits
+MAX_REBIND_ATTEMPTS = 5
 
 
 def interruptible_sleep(duration: float, stop_event: threading.Event) -> bool:
@@ -32,7 +33,6 @@ def interruptible_sleep(duration: float, stop_event: threading.Event) -> bool:
 
 
 def _attempt_rebind(device: Device, consecutive_errors: int, stop_event: threading.Event) -> tuple[int, float]:
-    """Attempt to rebind a device after consecutive failures. Returns (updated error count, next_rebind_at)."""
     log.warning("Attempting rebind after consecutive errors",
                 device_id=device.device_id, consecutive_errors=consecutive_errors)
     result = device.bind()
@@ -50,11 +50,12 @@ def start_device_tasks(
     device: Device,
     mqtt_client: paho_mqtt.Client,
     stop_event: threading.Event,
+    on_thread_dead: Callable[[str], None] | None = None,
 ):
     threading.Thread(target=device.synchronize_time, daemon=True).start()
     t = threading.Thread(
         target=_poll_device_params,
-        args=(device, mqtt_client, stop_event),
+        args=(device, mqtt_client, stop_event, on_thread_dead),
         daemon=True,
     )
     t.start()
@@ -97,6 +98,7 @@ def _poll_device_params(
     device: Device,
     mqtt_client: paho_mqtt.Client,
     stop_event: threading.Event,
+    on_thread_dead: Callable[[str], None] | None = None,
 ):
     params_topic = device.topic
     last_params: dict | None = None
@@ -105,6 +107,7 @@ def _poll_device_params(
     keep_alive_interval = 60.0
     next_rebind_at: float = 0.0
     rebind_attempts = 0
+    device_dead = False
 
     while not stop_event.is_set():
         polling_interval = adaptive_polling_manager.get_polling_interval(device.device_id)
@@ -146,6 +149,7 @@ def _poll_device_params(
                     if rebind_attempts > MAX_REBIND_ATTEMPTS:
                         log.error("Device considered dead, stopping thread",
                                   device_id=device.device_id, rebind_attempts=rebind_attempts)
+                        device_dead = True
                         break
                     consecutive_errors, next_rebind_at = _attempt_rebind(device, consecutive_errors, stop_event)
 
@@ -158,6 +162,7 @@ def _poll_device_params(
                 if rebind_attempts > MAX_REBIND_ATTEMPTS:
                     log.error("Device considered dead, stopping thread",
                               device_id=device.device_id, rebind_attempts=rebind_attempts)
+                    device_dead = True
                     break
                 consecutive_errors, next_rebind_at = _attempt_rebind(device, consecutive_errors, stop_event)
 
@@ -165,10 +170,11 @@ def _poll_device_params(
             log.info("Device polling stopped", device_id=device.device_id)
             break
 
-    # Clean up thread tracking so rediscovery can restart this device
     with _threads_lock:
         _device_threads.pop(device.device_id, None)
     log.info("Device thread exited", device_id=device.device_id)
+    if device_dead and on_thread_dead:
+        on_thread_dead(device.device_id)
 
 
 def _on_mqtt_message(client, _userdata, msg) -> None:
