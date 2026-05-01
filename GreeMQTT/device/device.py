@@ -4,7 +4,7 @@ import re
 from typing import Self
 
 from GreeMQTT.config import settings
-from GreeMQTT.device.device_communication import DeviceCommunicator
+from GreeMQTT.device.device_communication import discover_devices, scan_device, send_udp
 from GreeMQTT.device.device_param_converter import DeviceParamConverter
 from GreeMQTT.encryptor import decrypt, encrypt
 from GreeMQTT.logger import log
@@ -26,7 +26,6 @@ class Device:
         self.name = name
         self.is_GCM = is_GCM
         self.key = key
-        self.communicator = DeviceCommunicator(device_ip)
 
     @property
     def topic(self) -> str:
@@ -60,7 +59,7 @@ class Device:
         return dict(zip(decrypted["cols"], decrypted["dat"]))
 
     def _send(self, request: bytes) -> bytes | None:
-        return self.communicator.send_data(request)
+        return send_udp(self.device_ip, request)
 
     def bind(self, max_retries: int = DEVICE_BIND_MAX_RETRIES) -> Self | None:
         log.info("Binding to device", device=self.device_id)
@@ -173,7 +172,7 @@ class Device:
     @classmethod
     def search_devices(cls, ip_address: str) -> Self | None:
         log.info("Searching for device", ip_address=ip_address)
-        result = DeviceCommunicator.broadcast_scan(ip_address)
+        result = scan_device(ip_address)
         if not result:
             return None
         return cls.from_scan_response(result, ip_address)
@@ -181,7 +180,7 @@ class Device:
     @classmethod
     def discover_all(cls, broadcast_address: str = "192.168.1.255", skip_bind_ids: set[str] | None = None) -> list[Self]:
         """Discover all Gree devices on the network via a single UDP broadcast."""
-        responses = DeviceCommunicator.broadcast_discovery(broadcast_address)
+        responses = discover_devices(broadcast_address)
         devices: list[Self] = []
         for raw_data, ip in responses:
             device = cls.from_scan_response(raw_data, ip, skip_bind_ids=skip_bind_ids)
